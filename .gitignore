@@ -35,3 +35,10 @@ src-tauri/Cargo.lock
 
 # Mirror server (不上传到git)
 mirror-server/
+
+# 开发文档和记录（不上传到git）
+CLAUDE.md
+RELEASE_SUMMARY.md
+*.draft.md
+TODO.md
+NOTES.md
