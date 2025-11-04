@@ -433,14 +433,42 @@ async fn update_tool(tool: String) -> Result<UpdateResult, String> {
     // 根据工具类型获取更新命令
     let (update_command, update_args) = match tool.as_str() {
         "claude-code" => {
-            // Claude Code 使用官方安装脚本（重新安装即更新）
-            #[cfg(target_os = "windows")]
-            {
-                ("powershell", vec!["-Command", "irm https://claude.ai/install.ps1 | iex"])
-            }
-            #[cfg(not(target_os = "windows"))]
-            {
-                ("sh", vec!["-c", "curl -fsSL https://claude.ai/install.sh | bash"])
+            // Claude Code 检测安装方式
+            // 首先检查是否通过 npm 安装
+            let check_npm = Command::new("npm")
+                .env("PATH", get_extended_path())
+                .args(&["list", "-g", "@anthropic-ai/claude-code", "--depth=0"])
+                .output();
+
+            if let Ok(output) = check_npm {
+                let stdout_str = String::from_utf8_lossy(&output.stdout);
+                // 如果 npm list 输出包含包名，说明是 npm 安装的
+                if output.status.success() && stdout_str.contains("@anthropic-ai/claude-code") {
+                    println!("Claude Code detected as npm installation, using npm update");
+                    ("npm", vec!["update", "-g", "@anthropic-ai/claude-code"])
+                } else {
+                    // 使用官方安装脚本更新
+                    println!("Claude Code detected as native installation, using official script");
+                    #[cfg(target_os = "windows")]
+                    {
+                        ("powershell", vec!["-Command", "irm https://claude.ai/install.ps1 | iex"])
+                    }
+                    #[cfg(not(target_os = "windows"))]
+                    {
+                        ("sh", vec!["-c", "curl -fsSL https://claude.ai/install.sh | bash"])
+                    }
+                }
+            } else {
+                // npm 命令失败，默认使用官方脚本
+                println!("npm check failed, defaulting to official script");
+                #[cfg(target_os = "windows")]
+                {
+                    ("powershell", vec!["-Command", "irm https://claude.ai/install.ps1 | iex"])
+                }
+                #[cfg(not(target_os = "windows"))]
+                {
+                    ("sh", vec!["-c", "curl -fsSL https://claude.ai/install.sh | bash"])
+                }
             }
         },
         "codex" => {
