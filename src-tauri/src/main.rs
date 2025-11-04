@@ -275,12 +275,12 @@ async fn install_tool(tool: String, method: String) -> Result<InstallResult, Str
                 // official: 使用DuckCoding镜像安装脚本
                 #[cfg(target_os = "windows")]
                 {
-                    // Windows: irm https://duckcoding.com/mirrors/claude-code/install.ps1 | iex
+                    // Windows: irm https://mirror.duckcoding.com/claude-code/install.ps1 | iex
                     let output = Command::new("powershell")
                         .env("PATH", get_extended_path())
                         .args(&[
                             "-Command",
-                            "irm https://duckcoding.com/mirrors/claude-code/install.ps1 | iex"
+                            "irm https://mirror.duckcoding.com/claude-code/install.ps1 | iex"
                         ])
                         .output()
                         .map_err(|e| format!("Failed to execute installation: {}", e))?;
@@ -298,12 +298,12 @@ async fn install_tool(tool: String, method: String) -> Result<InstallResult, Str
 
                 #[cfg(not(target_os = "windows"))]
                 {
-                    // macOS/Linux: curl -fsSL https://duckcoding.com/mirrors/claude-code/install.sh | bash
+                    // macOS/Linux: curl -fsSL https://mirror.duckcoding.com/claude-code/install.sh | bash
                     let output = Command::new("sh")
                         .env("PATH", get_extended_path())
                         .args(&[
                             "-c",
-                            "curl -fsSL https://duckcoding.com/mirrors/claude-code/install.sh | bash"
+                            "curl -fsSL https://mirror.duckcoding.com/claude-code/install.sh | bash"
                         ])
                         .output()
                         .map_err(|e| format!("Failed to execute installation: {}", e))?;
@@ -604,11 +604,11 @@ async fn update_tool(tool: String) -> Result<UpdateResult, String> {
                     #[cfg(target_os = "windows")]
                     {
                         // Windows暂时还是用官方（或提示手动）
-                        ("powershell", vec!["-Command", "irm https://duckcoding.com/mirrors/claude-code/install.ps1 | iex"], "DuckCoding镜像更新")
+                        ("powershell", vec!["-Command", "irm https://mirror.duckcoding.com/claude-code/install.ps1 | iex"], "DuckCoding镜像更新")
                     }
                     #[cfg(not(target_os = "windows"))]
                     {
-                        ("sh", vec!["-c", "curl -fsSL https://duckcoding.com/mirrors/claude-code/install.sh | bash"], "DuckCoding镜像更新")
+                        ("sh", vec!["-c", "curl -fsSL https://mirror.duckcoding.com/claude-code/install.sh | bash"], "DuckCoding镜像更新")
                     }
                 }
             } else {
@@ -616,11 +616,11 @@ async fn update_tool(tool: String) -> Result<UpdateResult, String> {
                 println!("npm check failed, defaulting to DuckCoding mirror");
                 #[cfg(target_os = "windows")]
                 {
-                    ("powershell", vec!["-Command", "irm https://duckcoding.com/mirrors/claude-code/install.ps1 | iex"], "DuckCoding镜像更新")
+                    ("powershell", vec!["-Command", "irm https://mirror.duckcoding.com/claude-code/install.ps1 | iex"], "DuckCoding镜像更新")
                 }
                 #[cfg(not(target_os = "windows"))]
                 {
-                    ("sh", vec!["-c", "curl -fsSL https://duckcoding.com/mirrors/claude-code/install.sh | bash"], "DuckCoding镜像更新")
+                    ("sh", vec!["-c", "curl -fsSL https://mirror.duckcoding.com/claude-code/install.sh | bash"], "DuckCoding镜像更新")
                 }
             }
         },
@@ -665,7 +665,7 @@ async fn update_tool(tool: String) -> Result<UpdateResult, String> {
 
     println!("使用{}方式更新: {} {:?}", description, update_command, update_args);
 
-    // 执行更新，使用tokio::time::timeout添加超时（60秒）
+    // 执行更新，使用tokio::time::timeout添加超时（120秒）
     use tokio::time::{timeout, Duration};
 
     let update_task = tokio::task::spawn_blocking(move || {
@@ -675,7 +675,7 @@ async fn update_tool(tool: String) -> Result<UpdateResult, String> {
             .output()
     });
 
-    let output = match timeout(Duration::from_secs(60), update_task).await {
+    let output = match timeout(Duration::from_secs(120), update_task).await {
         Ok(Ok(Ok(output))) => output,
         Ok(Ok(Err(e))) => {
             return Err(format!("更新失败: {}", e));
@@ -684,7 +684,12 @@ async fn update_tool(tool: String) -> Result<UpdateResult, String> {
             return Err(format!("更新任务错误: {}", e));
         },
         Err(_) => {
-            return Err(format!("更新超时（60秒）。\n\n如果使用官方脚本更新需要访问外网，请确保网络畅通或使用npm方式安装：\n1. 先卸载: npm uninstall -g @anthropic-ai/claude-code\n2. 重新用npm安装: npm install -g @anthropic-ai/claude-code"));
+            let timeout_msg = if description.contains("DuckCoding镜像") {
+                "更新超时（120秒）。\n\n可能的原因：\n1. 镜像服务器响应慢\n2. 网络连接不稳定\n\n建议：\n1. 检查网络连接\n2. 重试更新\n3. 或使用 npm 方式：先卸载后重装\n   npm uninstall -g @anthropic-ai/claude-code\n   npm install -g @anthropic-ai/claude-code"
+            } else {
+                "更新超时（120秒）。\n\n请检查网络连接或稍后重试。"
+            };
+            return Err(timeout_msg.to_string());
         }
     };
 

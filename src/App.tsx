@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CheckCircle2, XCircle, Package, Settings as SettingsIcon, RefreshCw, LayoutDashboard, Loader2, AlertCircle, Save, ExternalLink, Info, ArrowRightLeft, Key, Sparkles, Trash2, GripVertical } from "lucide-react";
-import { checkInstallations, checkNodeEnvironment, installTool, checkUpdate, updateTool, configureApi, listProfiles, switchProfile, deleteProfile, getActiveConfig, saveGlobalConfig, getGlobalConfig, generateApiKeyForTool, getUsageStats, getUserQuota, type ToolStatus, type NodeEnvironment, type UpdateResult, type ActiveConfig, type GlobalConfig, type UsageStatsResult, type UserQuotaResult } from "@/lib/tauri-commands";
+import { CheckCircle2, XCircle, Package, Settings as SettingsIcon, RefreshCw, LayoutDashboard, Loader2, AlertCircle, Save, ExternalLink, Info, ArrowRightLeft, Key, Sparkles, BarChart3, GripVertical } from "lucide-react";
+import { checkInstallations, checkNodeEnvironment, installTool, checkUpdate, updateTool, configureApi, listProfiles, switchProfile, getActiveConfig, saveGlobalConfig, getGlobalConfig, generateApiKeyForTool, getUsageStats, getUserQuota, type ToolStatus, type NodeEnvironment, type UpdateResult, type ActiveConfig, type GlobalConfig, type UsageStatsResult, type UserQuotaResult } from "@/lib/tauri-commands";
 import {
   DndContext,
   closestCenter,
@@ -37,23 +37,22 @@ import DuckLogo from "@/assets/duck-logo.png";
 // Import statistics components
 import { QuotaCard } from "@/components/QuotaCard";
 import { UsageChart } from "@/components/UsageChart";
+import { TodayStatsCard } from "@/components/TodayStatsCard";
 
 interface ToolWithUpdate extends ToolStatus {
   hasUpdate?: boolean;
   latestVersion?: string;
 }
 
-// 可排序的配置项组件
-interface SortableProfileItemProps {
+// 可拖拽的配置项组件
+interface ProfileItemProps {
   profile: string;
   toolId: string;
   switching: boolean;
-  deleting: string | null;
   onSwitch: (toolId: string, profile: string) => void;
-  onDelete: (toolId: string, profile: string) => void;
 }
 
-function SortableProfileItem({ profile, toolId, switching, deleting, onSwitch, onDelete }: SortableProfileItemProps) {
+function SortableProfileItem({ profile, toolId, switching, onSwitch }: ProfileItemProps) {
   const {
     attributes,
     listeners,
@@ -75,62 +74,39 @@ function SortableProfileItem({ profile, toolId, switching, deleting, onSwitch, o
       style={style}
       className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border hover:border-blue-300 dark:hover:border-blue-700 transition-colors"
     >
-      <div className="flex items-center gap-2 flex-1" {...attributes} {...listeners}>
-        <div
+      <div className="flex items-center gap-2 flex-1">
+        <button
+          {...attributes}
+          {...listeners}
           className="cursor-grab active:cursor-grabbing p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors"
+          aria-label="拖拽排序"
         >
           <GripVertical className="h-4 w-4 text-slate-400" />
-        </div>
+        </button>
         <span className="font-medium text-slate-900 dark:text-slate-100">{profile}</span>
       </div>
-      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={(e) => {
-            e.stopPropagation();
-            console.log("Switch button clicked", { toolId, profile });
-            onSwitch(toolId, profile);
-          }}
-          disabled={switching}
-          className="shadow-sm hover:shadow-md transition-all"
-        >
-          {switching ? (
-            <>
-              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-              切换中...
-            </>
-          ) : (
-            <>
-              <ArrowRightLeft className="h-3 w-3 mr-1" />
-              切换
-            </>
-          )}
-        </Button>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            console.log("Delete button clicked", { toolId, profile });
-            onDelete(toolId, profile);
-          }}
-          disabled={deleting === `${toolId}-${profile}` || switching}
-          className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 dark:ring-offset-slate-950 dark:focus-visible:ring-slate-300 bg-red-500 text-white hover:bg-red-600 h-8 px-3 shadow-sm hover:shadow-md"
-        >
-          {deleting === `${toolId}-${profile}` ? (
-            <>
-              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-              删除中...
-            </>
-          ) : (
-            <>
-              <Trash2 className="h-3 w-3 mr-1" />
-              删除
-            </>
-          )}
-        </button>
-      </div>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => {
+          console.log("Switch button clicked", { toolId, profile });
+          onSwitch(toolId, profile);
+        }}
+        disabled={switching}
+        className="shadow-sm hover:shadow-md transition-all"
+      >
+        {switching ? (
+          <>
+            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+            切换中...
+          </>
+        ) : (
+          <>
+            <ArrowRightLeft className="h-3 w-3 mr-1" />
+            切换
+          </>
+        )}
+      </Button>
     </div>
   );
 }
@@ -145,7 +121,6 @@ function App() {
   const [updateCheckMessage, setUpdateCheckMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [configuring, setConfiguring] = useState(false);
   const [switching, setSwitching] = useState(false);
-  const [deleting, setDeleting] = useState<string | null>(null);
 
   // Ref to store timeout ID for cleanup
   const updateMessageTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -205,7 +180,7 @@ function App() {
     "gemini-cli": "Gemini CLI 专用分组",
   };
 
-  // 拖拽排序配置
+  // 拖拽排序相关 - Sensors
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -213,47 +188,51 @@ function App() {
     })
   );
 
-  // LocalStorage 键名
-  const PROFILE_ORDER_KEY = "duckcoding_profile_order";
-
-  // 从 localStorage 加载排序
-  const loadProfileOrder = (toolId: string): string[] | null => {
+  // 加载配置文件排序
+  const loadProfileOrder = (toolId: string): string[] => {
     try {
-      const stored = localStorage.getItem(`${PROFILE_ORDER_KEY}_${toolId}`);
-      return stored ? JSON.parse(stored) : null;
+      const key = `profile-order-${toolId}`;
+      const saved = localStorage.getItem(key);
+      return saved ? JSON.parse(saved) : [];
     } catch (error) {
       console.error("Failed to load profile order:", error);
-      return null;
+      return [];
     }
   };
 
-  // 保存排序到 localStorage
+  // 保存配置文件排序
   const saveProfileOrder = (toolId: string, order: string[]) => {
     try {
-      localStorage.setItem(`${PROFILE_ORDER_KEY}_${toolId}`, JSON.stringify(order));
+      const key = `profile-order-${toolId}`;
+      localStorage.setItem(key, JSON.stringify(order));
+      console.log(`Saved profile order for ${toolId}:`, order);
     } catch (error) {
       console.error("Failed to save profile order:", error);
     }
   };
 
-  // 应用排序到配置列表
-  const applySavedOrder = (toolId: string, profileList: string[]): string[] => {
+  // 应用已保存的排序
+  const applySavedOrder = (toolId: string, profiles: string[]): string[] => {
     const savedOrder = loadProfileOrder(toolId);
-    if (!savedOrder) return profileList;
+    if (savedOrder.length === 0) return profiles;
 
-    // 创建一个Set用于快速查找
-    const profileSet = new Set(profileList);
+    // 按照保存的顺序排列
+    const ordered: string[] = [];
+    const remaining = [...profiles];
 
-    // 先添加保存的顺序中存在的项
-    const ordered = savedOrder.filter(profile => profileSet.has(profile));
+    savedOrder.forEach(name => {
+      const index = remaining.indexOf(name);
+      if (index !== -1) {
+        ordered.push(name);
+        remaining.splice(index, 1);
+      }
+    });
 
-    // 添加新的项（不在保存的顺序中的）
-    const newProfiles = profileList.filter(profile => !savedOrder.includes(profile));
-
-    return [...ordered, ...newProfiles];
+    // 将新增的配置文件添加到末尾
+    return [...ordered, ...remaining];
   };
 
-  // 处理拖拽结束
+  // 处理拖拽结束事件
   const handleDragEnd = (toolId: string) => (event: DragEndEvent) => {
     const { active, over } = event;
 
@@ -263,9 +242,9 @@ function App() {
         const oldIndex = toolProfiles.indexOf(active.id as string);
         const newIndex = toolProfiles.indexOf(over.id as string);
 
-        const newOrder = arrayMove(toolProfiles, oldIndex, newIndex);
+        if (oldIndex === -1 || newIndex === -1) return prevProfiles;
 
-        // 保存新顺序到 localStorage
+        const newOrder = arrayMove(toolProfiles, oldIndex, newIndex);
         saveProfileOrder(toolId, newOrder);
 
         return {
@@ -806,53 +785,6 @@ function App() {
     }
   };
 
-  const handleDeleteProfile = async (toolId: string, profile: string) => {
-    console.log("handleDeleteProfile called", { toolId, profile });
-
-    // 确认删除
-    const confirmed = window.confirm(`确定要删除配置「${profile}」吗？此操作不可恢复。`);
-    console.log("Delete confirmed:", confirmed);
-
-    if (!confirmed) {
-      console.log("Delete cancelled by user");
-      return;
-    }
-
-    const deletingKey = `${toolId}-${profile}`;
-    setDeleting(deletingKey);
-
-    try {
-      console.log("Calling deleteProfile API...");
-      await deleteProfile(toolId, profile);
-      console.log("DeleteProfile API call successful");
-
-      // 重新加载该工具的配置列表
-      try {
-        const updatedProfiles = await listProfiles(toolId);
-        // 应用保存的排序
-        const orderedProfiles = applySavedOrder(toolId, updatedProfiles);
-        setProfiles({ ...profiles, [toolId]: orderedProfiles });
-      } catch (error) {
-        console.error("Failed to reload profiles", error);
-      }
-
-      // 重新加载当前生效的配置
-      try {
-        const activeConfig = await getActiveConfig(toolId);
-        setActiveConfigs({ ...activeConfigs, [toolId]: activeConfig });
-      } catch (error) {
-        console.error("Failed to reload active config", error);
-      }
-
-      alert("配置删除成功！");
-    } catch (error) {
-      console.error("Failed to delete profile:", error);
-      alert("删除失败: " + error);
-    } finally {
-      setDeleting(null);
-    }
-  };
-
   const installedTools = tools.filter(t => t.installed);
 
   return (
@@ -896,6 +828,13 @@ function App() {
             disabled={installedTools.length === 0}
           >
             <ArrowRightLeft className="mr-2 h-4 w-4" />切换配置
+          </Button>
+          <Button
+            variant={activeTab === "statistics" ? "default" : "ghost"}
+            className="w-full justify-start transition-all hover:scale-105"
+            onClick={() => setActiveTab("statistics")}
+          >
+            <BarChart3 className="mr-2 h-4 w-4" />用量统计
           </Button>
           <Separator className="my-3" />
           <Button
@@ -1068,39 +1007,64 @@ function App() {
                       </Card>
                     ))}
                   </div>
-
-                  {/* 统计数据区域 - 始终显示，组件内部处理空状态 */}
-                  <div className="mt-8 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold">
-                        DuckCoding 使用统计
-                      </h3>
-                      {globalConfig?.user_id && globalConfig?.system_token && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={loadStatistics}
-                          disabled={loadingStats}
-                        >
-                          {loadingStats ? (
-                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" />加载中...</>
-                          ) : (
-                            <><RefreshCw className="mr-2 h-4 w-4" />刷新</>
-                          )}
-                        </Button>
-                      )}
-                    </div>
-
-                    {/* 统计卡片网格 */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                      {/* 额度卡片 */}
-                      <QuotaCard quota={userQuota} loading={loadingStats} />
-
-                      {/* 用量折线图 */}
-                      <UsageChart stats={usageStats} loading={loadingStats} />
-                    </div>
-                  </div>
                 </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === "statistics" && (
+              <div>
+                <div className="mb-6">
+                  <h2 className="text-2xl font-semibold mb-1">用量统计</h2>
+                  <p className="text-sm text-muted-foreground">查看您的 DuckCoding API 使用情况和消费记录</p>
+                </div>
+
+                {!globalConfig?.user_id || !globalConfig?.system_token ? (
+                  <Card className="shadow-sm border">
+                    <CardContent className="pt-6">
+                      <div className="text-center py-12">
+                        <BarChart3 className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-30" />
+                        <h3 className="text-lg font-semibold mb-2">需要配置凭证</h3>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          请先在全局设置中配置您的用户ID和系统访问令牌
+                        </p>
+                        <Button
+                          onClick={() => setSettingsOpen(true)}
+                          className="shadow-md hover:shadow-lg transition-all"
+                        >
+                          <SettingsIcon className="mr-2 h-4 w-4" />
+                          前往设置
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-end">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={loadStatistics}
+                        disabled={loadingStats}
+                        className="shadow-sm hover:shadow-md transition-all"
+                      >
+                        {loadingStats ? (
+                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" />加载中...</>
+                        ) : (
+                          <><RefreshCw className="mr-2 h-4 w-4" />刷新数据</>
+                        )}
+                      </Button>
+                    </div>
+
+                    {/* 顶部卡片网格 - 2列 */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <QuotaCard quota={userQuota} loading={loadingStats} />
+                      <TodayStatsCard stats={usageStats} loading={loadingStats} />
+                    </div>
+
+                    {/* 用量趋势图 - 全宽 */}
+                    <UsageChart stats={usageStats} loading={loadingStats} />
+                  </div>
                 )}
               </div>
             )}
@@ -1470,8 +1434,7 @@ function App() {
                               {toolProfiles.length > 0 ? (
                                 <div className="space-y-3">
                                   <div className="flex items-center gap-2 mb-2">
-                                    <Label>可用的配置文件</Label>
-                                    <span className="text-xs text-muted-foreground">(拖拽排序)</span>
+                                    <Label>可用的配置文件（拖拽可调整顺序）</Label>
                                   </div>
                                   <DndContext
                                     sensors={sensors}
@@ -1489,9 +1452,7 @@ function App() {
                                             profile={profile}
                                             toolId={tool.id}
                                             switching={switching}
-                                            deleting={deleting}
                                             onSwitch={handleSwitchProfile}
-                                            onDelete={handleDeleteProfile}
                                           />
                                         ))}
                                       </div>

@@ -14,7 +14,7 @@ interface UsageChartProps {
 export function UsageChart({ stats, loading }: UsageChartProps) {
   if (loading) {
     return (
-      <Card className="shadow-sm border col-span-2">
+      <Card className="shadow-sm border">
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <BarChart3 className="h-4 w-4" />
@@ -30,7 +30,7 @@ export function UsageChart({ stats, loading }: UsageChartProps) {
 
   if (!stats || !stats.success || !stats.data || stats.data.length === 0) {
     return (
-      <Card className="shadow-sm border col-span-2">
+      <Card className="shadow-sm border">
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <BarChart3 className="h-4 w-4" />
@@ -56,7 +56,7 @@ export function UsageChart({ stats, loading }: UsageChartProps) {
 
     console.log("Aggregating usage data, total records:", stats.data.length);
 
-    const dateMap = new Map<string, { date: string; dateObj: Date; tokens: number; requests: number; quota: number }>();
+    const dateMap = new Map<string, { date: string; dateObj: Date; tokens: number; requests: number; quota: number; quotaRMB: number }>();
 
     stats.data.forEach(item => {
       const dateObj = new Date(item.created_at * 1000);
@@ -67,13 +67,15 @@ export function UsageChart({ stats, loading }: UsageChartProps) {
         existing.tokens += item.token_used;
         existing.requests += item.count;
         existing.quota += item.quota;
+        existing.quotaRMB += item.quota / 500000;
       } else {
         dateMap.set(date, {
           date,
           dateObj,
           tokens: item.token_used,
           requests: item.count,
-          quota: item.quota
+          quota: item.quota,
+          quotaRMB: item.quota / 500000
         });
       }
     });
@@ -112,16 +114,23 @@ export function UsageChart({ stats, loading }: UsageChartProps) {
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
+      const data = payload[0].payload;
       return (
         <div className="bg-white dark:bg-slate-800 p-3 rounded border shadow-lg">
           <p className="font-semibold text-sm mb-2">
-            {payload[0].payload.date}
+            {data.date}
           </p>
           <div className="space-y-1 text-xs">
             <p className="flex items-center justify-between gap-4">
               <span className="text-muted-foreground">请求次数:</span>
-              <span className="font-semibold">
-                {payload[0].value}
+              <span className="font-semibold text-blue-600">
+                {data.requests.toLocaleString()}
+              </span>
+            </p>
+            <p className="flex items-center justify-between gap-4">
+              <span className="text-muted-foreground">消费额度:</span>
+              <span className="font-semibold text-green-600">
+                {formatQuota(data.quotaRMB)}
               </span>
             </p>
           </div>
@@ -132,7 +141,7 @@ export function UsageChart({ stats, loading }: UsageChartProps) {
   };
 
   return (
-    <Card className="shadow-sm border col-span-2">
+    <Card className="shadow-sm border">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -153,7 +162,7 @@ export function UsageChart({ stats, loading }: UsageChartProps) {
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={320}>
-          <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+          <LineChart data={chartData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="opacity-10" />
             <XAxis
               dataKey="date"
@@ -163,10 +172,22 @@ export function UsageChart({ stats, loading }: UsageChartProps) {
               axisLine={false}
             />
             <YAxis
+              yAxisId="left"
               tick={{ fill: 'currentColor', fontSize: 11 }}
               className="text-muted-foreground"
               tickLine={false}
               axisLine={false}
+              label={{ value: '次数', angle: -90, position: 'insideLeft', style: { fontSize: 11 } }}
+            />
+            <YAxis
+              yAxisId="right"
+              orientation="right"
+              tick={{ fill: 'currentColor', fontSize: 11 }}
+              className="text-muted-foreground"
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={(value) => `¥${value.toFixed(2)}`}
+              label={{ value: '额度', angle: 90, position: 'insideRight', style: { fontSize: 11 } }}
             />
             <Tooltip content={<CustomTooltip />} />
             <Legend
@@ -174,11 +195,22 @@ export function UsageChart({ stats, loading }: UsageChartProps) {
               iconType="circle"
             />
             <Line
+              yAxisId="left"
               type="monotone"
               dataKey="requests"
               name="请求次数"
-              stroke="currentColor"
-              className="stroke-primary"
+              stroke="#3b82f6"
+              strokeWidth={2}
+              dot={{ r: 3 }}
+              activeDot={{ r: 5 }}
+              animationDuration={800}
+            />
+            <Line
+              yAxisId="right"
+              type="monotone"
+              dataKey="quotaRMB"
+              name="消费额度 (¥)"
+              stroke="#10b981"
               strokeWidth={2}
               dot={{ r: 3 }}
               activeDot={{ r: 5 }}
