@@ -1,4 +1,5 @@
 use crate::models::{Tool, InstallMethod};
+use crate::services::version::VersionService;
 use crate::utils::CommandExecutor;
 use anyhow::{Result, Context};
 
@@ -100,6 +101,32 @@ impl InstallerService {
 
     /// 安装工具
     pub async fn install(&self, tool: &Tool, method: &InstallMethod) -> Result<()> {
+        // 如果使用官方脚本（镜像）安装，先检查镜像状态
+        if matches!(method, InstallMethod::Official) {
+            let version_service = VersionService::new();
+            match version_service.check_version(tool).await {
+                Ok(version_info) => {
+                    // 检查镜像是否滞后
+                    if version_info.mirror_is_stale {
+                        // 返回特殊错误，让前端弹窗询问用户
+                        let mirror_ver = version_info.mirror_version.unwrap_or_default();
+                        let official_ver = version_info.latest_version.unwrap_or_default();
+
+                        anyhow::bail!(
+                            "MIRROR_STALE|{}|{}",
+                            mirror_ver,
+                            official_ver
+                        );
+                    }
+                }
+                Err(e) => {
+                    // 版本检查失败不应阻止安装，只记录警告
+                    eprintln!("⚠️  无法检查镜像状态: {}", e);
+                }
+            }
+        }
+
+        // 执行安装
         match method {
             InstallMethod::Official => self.install_official(tool).await,
             InstallMethod::Npm => self.install_npm(tool).await,

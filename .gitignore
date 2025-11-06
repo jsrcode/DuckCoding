@@ -43,3 +43,8 @@ RELEASE_SUMMARY.md
 *.draft.md
 TODO.md
 NOTES.md
+
+# 镜像站部署文档（包含敏感信息）
+MIRROR_DEPLOYMENT.md
+DEPLOYMENT*.md
+mirror-server/
