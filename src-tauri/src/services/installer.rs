@@ -1,5 +1,5 @@
 use crate::models::{Tool, InstallMethod};
-use crate::services::version::VersionService;
+use crate::services::version::{VersionInfo, VersionService};
 use crate::utils::CommandExecutor;
 use anyhow::{Result, Context};
 
@@ -100,36 +100,42 @@ impl InstallerService {
     }
 
     /// 安装工具
-    pub async fn install(&self, tool: &Tool, method: &InstallMethod) -> Result<()> {
-        // 如果使用官方脚本（镜像）安装，先检查镜像状态
-        if matches!(method, InstallMethod::Official) {
+    pub async fn install(&self, tool: &Tool, method: &InstallMethod, force: bool) -> Result<()> {
+        // 官方脚本 / npm 安装需要提前获取版本信息
+        let mut version_info: Option<VersionInfo> = None;
+        if matches!(method, InstallMethod::Official | InstallMethod::Npm) {
             let version_service = VersionService::new();
             match version_service.check_version(tool).await {
-                Ok(version_info) => {
-                    // 检查镜像是否滞后
-                    if version_info.mirror_is_stale {
-                        // 返回特殊错误，让前端弹窗询问用户
-                        let mirror_ver = version_info.mirror_version.unwrap_or_default();
-                        let official_ver = version_info.latest_version.unwrap_or_default();
+                Ok(info) => version_info = Some(info),
+                Err(e) => eprintln!("⚠️  无法检查镜像状态: {}", e),
+            }
+        }
 
-                        anyhow::bail!(
-                            "MIRROR_STALE|{}|{}",
-                            mirror_ver,
-                            official_ver
-                        );
-                    }
-                }
-                Err(e) => {
-                    // 版本检查失败不应阻止安装，只记录警告
-                    eprintln!("⚠️  无法检查镜像状态: {}", e);
+        // 如果使用官方脚本（镜像）安装，且未强制执行，则先检查镜像状态
+        if matches!(method, InstallMethod::Official) && !force {
+            if let Some(info) = &version_info {
+                if info.mirror_is_stale {
+                    let mirror_ver = info.mirror_version.clone().unwrap_or_default();
+                    let official_ver = info.latest_version.clone().unwrap_or_default();
+
+                    anyhow::bail!(
+                        "MIRROR_STALE|{}|{}",
+                        mirror_ver,
+                        official_ver
+                    );
                 }
             }
         }
 
+        // 针对 npm 安装，优先使用镜像/官方最新的具体版本号，避免 @latest 无法获取 preview 等版本
+        let npm_version_hint = version_info
+            .as_ref()
+            .and_then(Self::preferred_npm_version);
+
         // 执行安装
         match method {
             InstallMethod::Official => self.install_official(tool).await,
-            InstallMethod::Npm => self.install_npm(tool).await,
+            InstallMethod::Npm => self.install_npm(tool, npm_version_hint.as_deref()).await,
             InstallMethod::Brew => self.install_brew(tool).await,
         }
     }
@@ -184,13 +190,21 @@ impl InstallerService {
     }
 
     /// 使用 npm 安装（使用国内镜像加速）
-    async fn install_npm(&self, tool: &Tool) -> Result<()> {
+    async fn install_npm(&self, tool: &Tool, version_hint: Option<&str>) -> Result<()> {
         if !self.executor.command_exists_async("npm").await {
             anyhow::bail!("npm 未安装或未找到\n\n请先安装 Node.js (包含 npm):\n1. 访问 https://nodejs.org 下载安装\n2. 或使用官方安装方式（无需 npm）");
         }
 
+        let package_spec = match version_hint {
+            Some(version) if !version.is_empty() => format!("{}@{}", tool.npm_package, version),
+            _ => format!("{}@latest", tool.npm_package),
+        };
+
         // 使用国内镜像加速
-        let command = format!("npm install -g {} --registry https://registry.npmmirror.com", tool.npm_package);
+        let command = format!(
+            "npm install -g {} --registry https://registry.npmmirror.com",
+            package_spec
+        );
         let result = self.executor.execute_async(&command).await;
 
         if result.success {
@@ -225,46 +239,43 @@ impl InstallerService {
     }
 
     /// 更新工具
-    pub async fn update(&self, tool: &Tool) -> Result<()> {
+    pub async fn update(&self, tool: &Tool, force: bool) -> Result<()> {
         let method = self.detect_install_method(tool).await
             .context("无法检测安装方法")?;
 
-        // 如果使用官方脚本（镜像）更新，先检查镜像状态
-        if matches!(method, InstallMethod::Official) {
+        // 官方脚本 / npm 更新需要提前获取版本信息
+        let mut version_info: Option<VersionInfo> = None;
+        if matches!(method, InstallMethod::Official | InstallMethod::Npm) {
             let version_service = VersionService::new();
             match version_service.check_version(tool).await {
-                Ok(version_info) => {
-                    // 检查镜像是否滞后
-                    if version_info.mirror_is_stale {
-                        // 返回特殊错误，让前端弹窗询问用户
-                        let mirror_ver = version_info.mirror_version.unwrap_or_default();
-                        let official_ver = version_info.latest_version.unwrap_or_default();
+                Ok(info) => version_info = Some(info),
+                Err(e) => eprintln!("⚠️  无法检查镜像状态: {}", e),
+            }
+        }
 
-                        anyhow::bail!(
-                            "MIRROR_STALE|{}|{}",
-                            mirror_ver,
-                            official_ver
-                        );
-                    }
-                }
-                Err(e) => {
-                    // 版本检查失败不应阻止更新，只记录警告
-                    eprintln!("⚠️  无法检查镜像状态: {}", e);
+        // 如果使用官方脚本（镜像）更新，且未强制执行，则先检查镜像状态
+        if matches!(method, InstallMethod::Official) && !force {
+            if let Some(info) = &version_info {
+                if info.mirror_is_stale {
+                    let mirror_ver = info.mirror_version.clone().unwrap_or_default();
+                    let official_ver = info.latest_version.clone().unwrap_or_default();
+
+                    anyhow::bail!(
+                        "MIRROR_STALE|{}|{}",
+                        mirror_ver,
+                        official_ver
+                    );
                 }
             }
         }
 
+        let npm_version_hint = version_info
+            .as_ref()
+            .and_then(Self::preferred_npm_version);
+
         match method {
             InstallMethod::Npm => {
-                // 使用国内镜像加速
-                let command = format!("npm install -g {}@latest --registry https://registry.npmmirror.com", tool.npm_package);
-                let result = self.executor.execute_async(&command).await;
-
-                if result.success {
-                    Ok(())
-                } else {
-                    anyhow::bail!("❌ npm 更新失败\n\n错误信息：\n{}", result.stderr)
-                }
+                self.install_npm(tool, npm_version_hint.as_deref()).await
             }
             InstallMethod::Brew => {
                 let command = match tool.id.as_str() {
@@ -285,6 +296,19 @@ impl InstallerService {
                 self.install_official(tool).await
             }
         }
+    }
+
+    /// 选择适合 npm 安装的目标版本（优先镜像已同步的版本，滞后时使用官方最新）
+    fn preferred_npm_version(info: &VersionInfo) -> Option<String> {
+        let candidate = if info.mirror_is_stale {
+            info.latest_version.as_deref()
+        } else {
+            info.mirror_version
+                .as_deref()
+                .or(info.latest_version.as_deref())
+        }?;
+
+        Self::extract_version(candidate)
     }
 }
 

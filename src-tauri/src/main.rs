@@ -181,9 +181,10 @@ async fn check_node_environment() -> Result<NodeEnvironment, String> {
 }
 
 #[tauri::command]
-async fn install_tool(tool: String, method: String) -> Result<InstallResult, String> {
+async fn install_tool(tool: String, method: String, force: Option<bool>) -> Result<InstallResult, String> {
+    let force = force.unwrap_or(false);
     #[cfg(debug_assertions)]
-    println!("Installing {} via {} (using InstallerService)", tool, method);
+    println!("Installing {} via {} (using InstallerService, force={})", tool, method, force);
 
     // 获取工具定义
     let tool_obj = Tool::by_id(&tool)
@@ -200,7 +201,7 @@ async fn install_tool(tool: String, method: String) -> Result<InstallResult, Str
     // 使用 InstallerService 安装
     let installer = InstallerService::new();
 
-    match installer.install(&tool_obj, &install_method).await {
+    match installer.install(&tool_obj, &install_method, force).await {
         Ok(_) => {
             // 安装成功，构造成功消息
             let message = match method.as_str() {
@@ -242,6 +243,8 @@ async fn check_update(tool: String) -> Result<UpdateResult, String> {
                 has_update: version_info.has_update,
                 current_version: version_info.installed_version,
                 latest_version: version_info.latest_version,
+                mirror_version: version_info.mirror_version,
+                mirror_is_stale: Some(version_info.mirror_is_stale),
                 tool_id: Some(tool.clone()),
             })
         }
@@ -253,6 +256,8 @@ async fn check_update(tool: String) -> Result<UpdateResult, String> {
                 has_update: false,
                 current_version: None,
                 latest_version: None,
+                mirror_version: None,
+                mirror_is_stale: None,
                 tool_id: Some(tool.clone()),
             })
         }
@@ -275,6 +280,8 @@ async fn check_all_updates() -> Result<Vec<UpdateResult>, String> {
             has_update: info.has_update,
             current_version: info.installed_version,
             latest_version: info.latest_version,
+            mirror_version: info.mirror_version,
+            mirror_is_stale: Some(info.mirror_is_stale),
             tool_id: Some(info.tool_id),
         }
     }).collect();
@@ -283,9 +290,10 @@ async fn check_all_updates() -> Result<Vec<UpdateResult>, String> {
 }
 
 #[tauri::command]
-async fn update_tool(tool: String) -> Result<UpdateResult, String> {
+async fn update_tool(tool: String, force: Option<bool>) -> Result<UpdateResult, String> {
+    let force = force.unwrap_or(false);
     #[cfg(debug_assertions)]
-    println!("Updating {} (using InstallerService)", tool);
+    println!("Updating {} (using InstallerService, force={})", tool, force);
 
     // 获取工具定义
     let tool_obj = Tool::by_id(&tool)
@@ -299,7 +307,7 @@ async fn update_tool(tool: String) -> Result<UpdateResult, String> {
 
     let update_result = timeout(
         Duration::from_secs(120),
-        installer.update(&tool_obj)
+        installer.update(&tool_obj, force)
     ).await;
 
     match update_result {
@@ -313,6 +321,8 @@ async fn update_tool(tool: String) -> Result<UpdateResult, String> {
                 has_update: false,
                 current_version: new_version.clone(),
                 latest_version: new_version,
+                mirror_version: None,
+                mirror_is_stale: None,
                 tool_id: Some(tool.clone()),
             })
         }
@@ -352,7 +362,7 @@ async fn update_tool(tool: String) -> Result<UpdateResult, String> {
 }
 
 #[tauri::command]
-async fn configure_api(tool: String, _provider: String, api_key: String, base_url: Option<String>, profile_name: Option<String>) -> Result<(), String> {
+async fn configure_api(tool: String, _provider: String, api_key: String, base_url: Option<String>, profile_name: Option<String>, create_backup: Option<bool>) -> Result<(), String> {
     #[cfg(debug_assertions)]
     println!("Configuring {} (using ConfigService)", tool);
 
@@ -374,6 +384,7 @@ async fn configure_api(tool: String, _provider: String, api_key: String, base_ur
         &api_key,
         &base_url_str,
         profile_name.as_deref(),
+        create_backup.unwrap_or(false),
     ).map_err(|e| e.to_string())?;
 
     Ok(())
@@ -428,6 +439,58 @@ async fn delete_profile(tool: String, profile: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+async fn list_timestamped_backups(tool: String) -> Result<Vec<String>, String> {
+    #[cfg(debug_assertions)]
+    println!("Listing timestamped backups for: {}", tool);
+
+    // 获取工具定义
+    let tool_obj = Tool::by_id(&tool)
+        .ok_or_else(|| format!("❌ 未知的工具: {}", tool))?;
+
+    // 使用 ConfigService 列出时间戳备份
+    ConfigService::list_timestamped_backups(&tool_obj)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn restore_timestamped_backup(tool: String, timestamp: String) -> Result<(), String> {
+    #[cfg(debug_assertions)]
+    println!("Restoring timestamped backup: tool={}, timestamp={}", tool, timestamp);
+
+    // 获取工具定义
+    let tool_obj = Tool::by_id(&tool)
+        .ok_or_else(|| format!("❌ 未知的工具: {}", tool))?;
+
+    // 使用 ConfigService 恢复时间戳备份
+    ConfigService::restore_timestamped_backup(&tool_obj, &timestamp)
+        .map_err(|e| e.to_string())?;
+
+    #[cfg(debug_assertions)]
+    println!("Successfully restored backup: {}", timestamp);
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn delete_timestamped_backup(tool: String, timestamp: String) -> Result<(), String> {
+    #[cfg(debug_assertions)]
+    println!("Deleting timestamped backup: tool={}, timestamp={}", tool, timestamp);
+
+    // 获取工具定义
+    let tool_obj = Tool::by_id(&tool)
+        .ok_or_else(|| format!("❌ 未知的工具: {}", tool))?;
+
+    // 使用 ConfigService 删除时间戳备份
+    ConfigService::delete_timestamped_backup(&tool_obj, &timestamp)
+        .map_err(|e| e.to_string())?;
+
+    #[cfg(debug_assertions)]
+    println!("Successfully deleted backup: {}", timestamp);
+
+    Ok(())
+}
+
 // 数据结构定义
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 struct ToolStatus {
@@ -459,6 +522,8 @@ struct UpdateResult {
     has_update: bool,
     current_version: Option<String>,
     latest_version: Option<String>,
+    mirror_version: Option<String>,     // 镜像实际可安装的版本
+    mirror_is_stale: Option<bool>,      // 镜像是否滞后
     tool_id: Option<String>,  // 新增：工具ID，用于批量检查时识别工具
 }
 
@@ -1089,13 +1154,27 @@ async fn get_active_config(tool: String) -> Result<ActiveConfig, String> {
                     .map_err(|e| format!("❌ 解析TOML失败: {}", e))?;
 
                 if let toml::Value::Table(table) = config {
+                    let selected_provider = table
+                        .get("model_provider")
+                        .and_then(|value| value.as_str())
+                        .map(|s| s.to_string());
+
                     if let Some(toml::Value::Table(providers)) = table.get("model_providers") {
-                        // 尝试获取 duckcoding 或 custom provider 的 base_url
-                        for (_, provider) in providers {
-                            if let toml::Value::Table(p) = provider {
-                                if let Some(toml::Value::String(url)) = p.get("base_url") {
+                        if let Some(provider_name) = selected_provider.as_deref() {
+                            if let Some(toml::Value::Table(provider_table)) = providers.get(provider_name) {
+                                if let Some(toml::Value::String(url)) = provider_table.get("base_url") {
                                     base_url = url.clone();
-                                    break;
+                                }
+                            }
+                        }
+
+                        if base_url == "未配置" {
+                            for (_, provider) in providers {
+                                if let toml::Value::Table(p) = provider {
+                                    if let Some(toml::Value::String(url)) = p.get("base_url") {
+                                        base_url = url.clone();
+                                        break;
+                                    }
                                 }
                             }
                         }
@@ -1388,6 +1467,9 @@ fn main() {
             list_profiles,
             switch_profile,
             delete_profile,
+            list_timestamped_backups,
+            restore_timestamped_backup,
+            delete_timestamped_backup,
             get_active_config,
             save_global_config,
             get_global_config,
@@ -1399,32 +1481,28 @@ fn main() {
     // 使用自定义事件循环处理 macOS Reopen 事件
     builder.build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app_handle, event| match event {
-            tauri::RunEvent::Reopen { .. } => {
-                // macOS: 从 Dock 或 Cmd+Tab 唤醒应用
-                #[cfg(target_os = "macos")]
-                {
-                    use cocoa::appkit::NSApplication;
-                    use cocoa::base::nil;
-                    use cocoa::foundation::NSAutoreleasePool;
-                    use objc::runtime::YES;
+        .run(|app_handle, event| {
+            #[cfg(target_os = "macos")]
+            {
+                use cocoa::appkit::NSApplication;
+                use cocoa::base::nil;
+                use cocoa::foundation::NSAutoreleasePool;
+                use objc::runtime::YES;
 
+                if let tauri::RunEvent::Reopen { .. } = event {
                     println!("macOS Reopen event detected");
 
                     if let Some(window) = app_handle.get_webview_window("main") {
-                        // 恢复 Dock 图标
                         unsafe {
                             let _pool = NSAutoreleasePool::new(nil);
                             let app_macos = NSApplication::sharedApplication(nil);
                             app_macos.setActivationPolicy_(cocoa::appkit::NSApplicationActivationPolicy::NSApplicationActivationPolicyRegular);
                         }
 
-                        // 显示并激活窗口
                         let _ = window.show();
                         let _ = window.unminimize();
                         let _ = window.set_focus();
 
-                        // 激活应用到前台
                         unsafe {
                             let ns_app = NSApplication::sharedApplication(nil);
                             ns_app.activateIgnoringOtherApps_(YES);
@@ -1434,6 +1512,5 @@ fn main() {
                     }
                 }
             }
-            _ => {}
         });
 }

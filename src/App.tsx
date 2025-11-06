@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CheckCircle2, XCircle, Package, Settings as SettingsIcon, RefreshCw, LayoutDashboard, Loader2, AlertCircle, Save, ExternalLink, Info, ArrowRightLeft, Key, Sparkles, BarChart3, GripVertical, Trash2 } from "lucide-react";
-import { checkInstallations, checkNodeEnvironment, installTool, checkAllUpdates, updateTool, configureApi, listProfiles, switchProfile, deleteProfile, getActiveConfig, saveGlobalConfig, getGlobalConfig, generateApiKeyForTool, getUsageStats, getUserQuota, type ToolStatus, type NodeEnvironment, type ActiveConfig, type GlobalConfig, type UsageStatsResult, type UserQuotaResult } from "@/lib/tauri-commands";
+import { checkInstallations, checkNodeEnvironment, installTool, checkAllUpdates, updateTool, configureApi, listProfiles, switchProfile, deleteProfile, getActiveConfig, saveGlobalConfig, getGlobalConfig, generateApiKeyForTool, getUsageStats, getUserQuota, listTimestampedBackups, restoreTimestampedBackup, deleteTimestampedBackup, type ToolStatus, type NodeEnvironment, type ActiveConfig, type GlobalConfig, type UsageStatsResult, type UserQuotaResult } from "@/lib/tauri-commands";
 import { useToast } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
 import {
@@ -165,6 +165,17 @@ function App() {
   const [activeConfigs, setActiveConfigs] = useState<Record<string, ActiveConfig>>({});
   const [selectedSwitchTab, setSelectedSwitchTab] = useState<string>("");  // 切换配置页面的Tab选择
 
+  // 备份管理状态
+  const [timestampedBackups, setTimestampedBackups] = useState<Record<string, string[]>>({});
+  const [loadingBackups, setLoadingBackups] = useState(false);
+  const [restoringBackup, setRestoringBackup] = useState<string | null>(null);
+  const [deletingBackup, setDeletingBackup] = useState<string | null>(null);
+  const [deleteConfirmDialog, setDeleteConfirmDialog] = useState<{
+    open: boolean;
+    toolId: string;
+    profile: string;
+  }>({ open: false, toolId: "", profile: "" });
+
   // 全局配置状态
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [globalConfig, setGlobalConfig] = useState<GlobalConfig | null>(null);
@@ -192,7 +203,15 @@ function App() {
     toolId: string;
     mirrorVersion: string;
     officialVersion: string;
-  }>({ open: false, toolId: "", mirrorVersion: "", officialVersion: "" });
+    source: 'install' | 'update';
+  }>({ open: false, toolId: "", mirrorVersion: "", officialVersion: "", source: 'install' });
+
+  // 配置覆盖确认对话框状态
+  const [configOverrideDialog, setConfigOverrideDialog] = useState<{
+    open: boolean;
+    targetProfile: string;
+    willOverride: boolean;
+  }>({ open: false, targetProfile: "", willOverride: false });
 
   const logoMap: Record<string, string> = {
     "claude-code": ClaudeLogo,
@@ -210,6 +229,19 @@ function App() {
     "claude-code": "Claude Code 专用分组",
     "codex": "CodeX 专用分组",
     "gemini-cli": "Gemini CLI 专用分组",
+  };
+
+  const getToolDisplayName = (toolId: string) => {
+    switch (toolId) {
+      case "claude-code":
+        return "Claude Code";
+      case "codex":
+        return "CodeX";
+      case "gemini-cli":
+        return "Gemini CLI";
+      default:
+        return toolId;
+    }
   };
 
   // 拖拽排序相关 - Sensors
@@ -286,11 +318,18 @@ function App() {
     }
   };
 
-  // 清理版本号显示
-  const cleanVersion = (version: string | null): string => {
+  // 版本号展示：保留 preview/beta 等标记
+  const formatVersionLabel = (version: string | null): string => {
     if (!version) return "未知";
-    const match = version.match(/(\d+\.\d+\.\d+)/);
-    return match ? match[1] : version;
+    const trimmed = version.trim();
+
+    // 只要包含非数字的版本标记，就直接保留原样（如 preview、beta、rust-v 等）
+    if (/[a-zA-Z]/.test(trimmed.replace(/^v/i, "")) || trimmed.includes("-")) {
+      return trimmed;
+    }
+
+    const match = trimmed.match(/(\d+\.\d+\.\d+)/);
+    return match ? match[1] : trimmed;
   };
 
   // 打开外部链接
@@ -380,8 +419,11 @@ function App() {
       if (!selectedTool && installedTools.length > 0) {
         setSelectedTool(installedTools[0].id);
       }
+      // 加载配置列表以支持覆盖检测
+      loadAllProfiles();
+
       if (activeTab === "switch") {
-        loadAllProfiles();
+        loadTimestampedBackups(); // 切换配置页面额外加载备份列表
       }
     }
   }, [activeTab, tools, selectedTool]);
@@ -461,6 +503,101 @@ function App() {
     // 设置默认选中的Tab（第一个已安装的工具）
     if (installedTools.length > 0 && !selectedSwitchTab) {
       setSelectedSwitchTab(installedTools[0].id);
+    }
+  };
+
+  // 加载时间戳备份列表
+  const loadTimestampedBackups = async () => {
+    const installedTools = tools.filter(t => t.installed);
+    const backupData: Record<string, string[]> = {};
+
+    setLoadingBackups(true);
+
+    for (const tool of installedTools) {
+      try {
+        const toolBackups = await listTimestampedBackups(tool.id);
+        backupData[tool.id] = toolBackups;
+      } catch (error) {
+        console.error("Failed to load backups for " + tool.id, error);
+        backupData[tool.id] = [];
+      }
+    }
+
+    setTimestampedBackups(backupData);
+    setLoadingBackups(false);
+  };
+
+  // 恢复备份
+  const handleRestoreBackup = async (toolId: string, timestamp: string) => {
+    if (!confirm(`确定要恢复到备份 "${timestamp}" 吗？\n\n当前配置将被覆盖。`)) {
+      return;
+    }
+
+    try {
+      setRestoringBackup(timestamp);
+      await restoreTimestampedBackup(toolId, timestamp);
+
+      // 重新加载配置和备份列表
+      await loadAllProfiles();
+
+      toast({
+        title: "恢复成功",
+        description: `已恢复到备份 ${timestamp}\n\n请重启相关 CLI 工具以使新配置生效。`
+      });
+    } catch (error) {
+      console.error("Failed to restore backup:", error);
+      toast({
+        title: "恢复失败",
+        description: String(error),
+        variant: "destructive"
+      });
+    } finally {
+      setRestoringBackup(null);
+    }
+  };
+
+  // 删除备份
+  const handleDeleteBackup = async (toolId: string, timestamp: string) => {
+    if (!confirm(`确定要删除备份 "${timestamp}" 吗？\n\n此操作不可恢复。`)) {
+      return;
+    }
+
+    try {
+      setDeletingBackup(timestamp);
+      await deleteTimestampedBackup(toolId, timestamp);
+
+      // 重新加载备份列表
+      await loadTimestampedBackups();
+
+      toast({
+        title: "删除成功",
+        description: "备份已删除"
+      });
+    } catch (error) {
+      console.error("Failed to delete backup:", error);
+      toast({
+        title: "删除失败",
+        description: String(error),
+        variant: "destructive"
+      });
+    } finally {
+      setDeletingBackup(null);
+    }
+  };
+
+  // 格式化时间戳显示
+  const formatTimestamp = (timestamp: string): string => {
+    // timestamp格式: YYYYMMDD-HHMMSS
+    try {
+      const year = timestamp.substring(0, 4);
+      const month = timestamp.substring(4, 6);
+      const day = timestamp.substring(6, 8);
+      const hour = timestamp.substring(9, 11);
+      const minute = timestamp.substring(11, 13);
+      const second = timestamp.substring(13, 15);
+      return `${year}年${month}月${day}日 ${hour}:${minute}:${second}`;
+    } catch {
+      return timestamp;
     }
   };
 
@@ -732,7 +869,8 @@ function App() {
             open: true,
             toolId: toolId,
             mirrorVersion: mirrorVer,
-            officialVersion: officialVer
+            officialVersion: officialVer,
+            source: 'install'
           });
           return; // 不显示 toast，由对话框处理
         }
@@ -783,7 +921,8 @@ function App() {
             open: true,
             toolId: toolId,
             mirrorVersion: mirrorVer,
-            officialVersion: officialVer
+            officialVersion: officialVer,
+            source: 'update'
           });
           return; // 不显示 toast，由对话框处理
         }
@@ -818,14 +957,66 @@ function App() {
       return;
     }
 
+    if (provider === "custom" && !baseUrl.trim()) {
+      toast({
+        title: "请填写 Base URL",
+        description: "选择自定义端点时必须填写有效的 Base URL",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // 确保拥有最新的配置数据（防止状态尚未同步）
+    let currentConfig = activeConfigs[selectedTool];
+    if (!currentConfig) {
+      try {
+        const latestConfig = await getActiveConfig(selectedTool);
+        setActiveConfigs(prev => ({ ...prev, [selectedTool]: latestConfig }));
+        currentConfig = latestConfig;
+      } catch (error) {
+        console.error("Failed to fetch active config before saving:", error);
+      }
+    }
+
+    // 检查是否会覆盖现有配置
+    const existingProfiles = profiles[selectedTool] || [];
+
+    // 只有真实配置存在才认为会覆盖（排除"未配置"的默认值）
+    const hasRealConfig = currentConfig &&
+                          currentConfig.api_key !== "未配置" &&
+                          currentConfig.base_url !== "未配置";
+
+    const willOverride = profileName
+      ? existingProfiles.includes(profileName)
+      : hasRealConfig;
+
+    // 如果会覆盖且未确认，显示确认对话框
+    if (willOverride && !configOverrideDialog.open) {
+      setConfigOverrideDialog({
+        open: true,
+        targetProfile: profileName || "主配置",
+        willOverride: true
+      });
+      return;
+    }
+
+    // 执行保存配置（从确认对话框调用或无需确认时）
+    await performConfigSave(false);
+  };
+
+  // 实际执行配置保存的函数
+  const performConfigSave = async (withBackup: boolean) => {
     try {
       setConfiguring(true);
+
+      // 调用后端 API 并传递 backup 参数
       await configureApi(
         selectedTool,
         provider,
         apiKey,
-        provider === "custom" ? baseUrl : undefined,
-        profileName || undefined
+        provider === "custom" ? baseUrl.trim() : undefined,
+        profileName || undefined,
+        withBackup
       );
 
       // 清空表单
@@ -836,11 +1027,14 @@ function App() {
       // 重新加载配置列表
       await loadAllProfiles();
 
+      // 关闭确认对话框
+      setConfigOverrideDialog({ open: false, targetProfile: "", willOverride: false });
+
       // 弹窗提示成功
       const toolName = selectedTool === 'claude-code' ? 'Claude Code' : selectedTool === 'codex' ? 'CodeX' : 'Gemini CLI';
       toast({
         title: "配置保存成功",
-        description: `${toolName} 配置保存成功！${profileName ? `\n配置名称: ${profileName}` : ''}`
+        description: `${toolName} 配置保存成功！${profileName ? `\n配置名称: ${profileName}` : ''}${withBackup ? '\n已创建备份' : ''}`
       });
     } catch (error) {
       console.error("Failed to configure API:", error);
@@ -884,12 +1078,15 @@ function App() {
     }
   };
 
-  const handleDeleteProfile = async (toolId: string, profile: string) => {
-    // 确认删除
-    if (!confirm(`确定要删除配置 "${profile}" 吗？\n\n此操作不可恢复。`)) {
-      return;
-    }
+  const handleDeleteProfile = (toolId: string, profile: string) => {
+    setDeleteConfirmDialog({
+      open: true,
+      toolId,
+      profile
+    });
+  };
 
+  const performDeleteProfile = async (toolId: string, profile: string) => {
     const profileKey = `${toolId}-${profile}`;
 
     try {
@@ -961,10 +1158,18 @@ function App() {
         delete updated[profileKey];
         return updated;
       });
+
+      setDeleteConfirmDialog({ open: false, toolId: "", profile: "" });
     }
   };
 
   const installedTools = tools.filter(t => t.installed);
+  const deleteDialogProfileKey = deleteConfirmDialog.toolId
+    ? `${deleteConfirmDialog.toolId}-${deleteConfirmDialog.profile}`
+    : "";
+  const deleteDialogInProgress = deleteDialogProfileKey
+    ? !!deletingProfiles[deleteDialogProfileKey]
+    : false;
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
@@ -1122,7 +1327,7 @@ function App() {
                               <div className="flex items-center justify-between">
                                 <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">当前版本</span>
                                 <span className="font-mono text-sm font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 px-3 py-1 rounded-lg">
-                                  {cleanVersion(tool.version)}
+                                  {formatVersionLabel(tool.version)}
                                 </span>
                               </div>
                               {tool.hasUpdate && tool.latestVersion && (
@@ -1130,14 +1335,14 @@ function App() {
                                   <div className="flex items-center justify-between pt-1 border-t border-slate-200 dark:border-slate-700">
                                     <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">官方最新</span>
                                     <span className="font-mono text-sm font-semibold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950 px-3 py-1 rounded-lg">
-                                      {cleanVersion(tool.latestVersion)}
+                                      {formatVersionLabel(tool.latestVersion)}
                                     </span>
                                   </div>
                                   {tool.mirrorVersion && tool.mirrorVersion !== tool.latestVersion && (
                                     <div className="flex items-center justify-between pt-1 border-t border-slate-200 dark:border-slate-700">
                                       <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">镜像版本</span>
                                       <span className="font-mono text-sm font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950 px-3 py-1 rounded-lg">
-                                        {cleanVersion(tool.mirrorVersion)}
+                                        {formatVersionLabel(tool.mirrorVersion)}
                                       </span>
                                     </div>
                                   )}
@@ -1309,7 +1514,7 @@ function App() {
                                   <div className="flex items-center gap-2 mt-3">
                                     <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">当前版本:</span>
                                     <span className="font-mono text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 px-2.5 py-1 rounded-lg shadow-sm">
-                                      {cleanVersion(tool.version)}
+                                      {formatVersionLabel(tool.version)}
                                     </span>
                                   </div>
                                 )}
@@ -1663,6 +1868,82 @@ function App() {
                                   <p className="text-sm text-muted-foreground">在"配置 API"页面保存配置时填写名称即可创建多个配置</p>
                                 </div>
                               )}
+
+                              {/* 备份管理 */}
+                              <div className="mt-8">
+                                <div className="flex items-center justify-between mb-4">
+                                  <Label className="text-base font-semibold">配置备份</Label>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={loadTimestampedBackups}
+                                    disabled={loadingBackups}
+                                    className="shadow-sm"
+                                  >
+                                    {loadingBackups ? (
+                                      <><Loader2 className="mr-2 h-3 w-3 animate-spin" />加载中...</>
+                                    ) : (
+                                      <><RefreshCw className="mr-2 h-3 w-3" />刷新</>
+                                    )}
+                                  </Button>
+                                </div>
+
+                                {loadingBackups ? (
+                                  <div className="text-center py-8 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                                    <Loader2 className="h-8 w-8 mx-auto animate-spin text-primary" />
+                                  </div>
+                                ) : (timestampedBackups[tool.id] && timestampedBackups[tool.id].length > 0) ? (
+                                  <div className="space-y-2">
+                                    {timestampedBackups[tool.id].map(timestamp => (
+                                      <div
+                                        key={timestamp}
+                                        className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border hover:border-amber-300 dark:hover:border-amber-700 transition-colors"
+                                      >
+                                        <div className="flex items-center gap-3">
+                                          <AlertCircle className="h-4 w-4 text-amber-500" />
+                                          <div>
+                                            <span className="font-medium text-slate-900 dark:text-slate-100">{formatTimestamp(timestamp)}</span>
+                                            <p className="text-xs text-muted-foreground mt-0.5">备份时间戳: {timestamp}</p>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => handleRestoreBackup(tool.id, timestamp)}
+                                            disabled={restoringBackup === timestamp || deletingBackup === timestamp}
+                                            className="shadow-sm hover:shadow-md transition-all"
+                                          >
+                                            {restoringBackup === timestamp ? (
+                                              <><Loader2 className="h-3 w-3 mr-1 animate-spin" />恢复中...</>
+                                            ) : (
+                                              <><RefreshCw className="h-3 w-3 mr-1" />恢复</>
+                                            )}
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            onClick={() => handleDeleteBackup(tool.id, timestamp)}
+                                            disabled={restoringBackup === timestamp || deletingBackup === timestamp}
+                                            className="shadow-sm hover:shadow-md transition-all"
+                                          >
+                                            {deletingBackup === timestamp ? (
+                                              <><Loader2 className="h-3 w-3 mr-1 animate-spin" />删除中...</>
+                                            ) : (
+                                              <><Trash2 className="h-3 w-3 mr-1" />删除</>
+                                            )}
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="text-center py-6 bg-slate-50 dark:bg-slate-800/50 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700">
+                                    <p className="text-sm text-muted-foreground">暂无配置备份</p>
+                                    <p className="text-xs text-muted-foreground mt-1">保存配置时选择"修改并备份"会自动创建时间戳备份</p>
+                                  </div>
+                                )}
+                              </div>
                             </CardContent>
                           </Card>
                         </TabsContent>
@@ -1842,7 +2123,7 @@ function App() {
               type="button"
               variant="outline"
               onClick={() => {
-                setMirrorStaleDialog({ open: false, toolId: "", mirrorVersion: "", officialVersion: "" });
+                setMirrorStaleDialog({ open: false, toolId: "", mirrorVersion: "", officialVersion: "", source: 'install' });
               }}
             >
               取消
@@ -1851,13 +2132,44 @@ function App() {
               type="button"
               variant="secondary"
               onClick={async () => {
-                const toolId = mirrorStaleDialog.toolId;
-                setMirrorStaleDialog({ open: false, toolId: "", mirrorVersion: "", officialVersion: "" });
-                toast({
-                  title: "注意",
-                  description: `镜像安装将获得版本 ${mirrorStaleDialog.mirrorVersion}，建议改用 npm 安装获取最新版本`,
-                  variant: "destructive"
-                });
+                // 缓存所有需要的值，避免清空状态后无法访问
+                const { toolId, source, mirrorVersion } = mirrorStaleDialog;
+                setMirrorStaleDialog({ open: false, toolId: "", mirrorVersion: "", officialVersion: "", source: 'install' });
+
+                // 根据来源调用强制安装或更新
+                try {
+                  if (source === 'install') {
+                    setInstalling(toolId);
+                    const method = installMethods[toolId] || "official";
+                    await installTool(toolId, method, true); // force=true
+                    await loadToolStatus();
+                    toast({
+                      title: "安装成功",
+                      description: `已安装镜像版本 ${mirrorVersion}`
+                    });
+                  } else {
+                    setUpdating(toolId);
+                    await updateTool(toolId, true); // force=true
+                    await loadToolStatus();
+                    toast({
+                      title: "更新成功",
+                      description: `已更新到镜像版本 ${mirrorVersion}`
+                    });
+                  }
+                } catch (error) {
+                  console.error("Failed to force install/update", error);
+                  toast({
+                    title: source === 'install' ? "安装失败" : "更新失败",
+                    description: String(error),
+                    variant: "destructive"
+                  });
+                } finally {
+                  if (source === 'install') {
+                    setInstalling(null);
+                  } else {
+                    setUpdating(null);
+                  }
+                }
               }}
             >
               继续使用镜像 ({mirrorStaleDialog.mirrorVersion})
@@ -1866,8 +2178,9 @@ function App() {
               <Button
                 type="button"
                 onClick={async () => {
-                  const toolId = mirrorStaleDialog.toolId;
-                  setMirrorStaleDialog({ open: false, toolId: "", mirrorVersion: "", officialVersion: "" });
+                  // 缓存所有需要的值
+                  const { toolId, officialVersion } = mirrorStaleDialog;
+                  setMirrorStaleDialog({ open: false, toolId: "", mirrorVersion: "", officialVersion: "", source: 'install' });
 
                   // 改用 npm 安装
                   setInstallMethods({ ...installMethods, [toolId]: "npm" });
@@ -1879,7 +2192,7 @@ function App() {
                     await loadToolStatus();
                     toast({
                       title: "安装成功",
-                      description: `已获取最新版本 ${mirrorStaleDialog.officialVersion}`
+                      description: `已获取最新版本 ${officialVersion}`
                     });
                   } catch (error) {
                     console.error("Failed to install with npm", error);
@@ -1900,6 +2213,172 @@ function App() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* 删除配置确认对话框 */}
+      <Dialog
+        open={deleteConfirmDialog.open}
+        onOpenChange={(open) => {
+          if (!open && !deleteDialogInProgress) {
+            setDeleteConfirmDialog({ open: false, toolId: "", profile: "" });
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[480px]" onPointerDown={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-red-600" />
+              确认删除配置
+            </DialogTitle>
+            <DialogDescription>
+              此操作会永久删除 {getToolDisplayName(deleteConfirmDialog.toolId)} 的配置
+              「{deleteConfirmDialog.profile}」，该操作不可恢复，请谨慎确认。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
+            <p>
+              删除后，{getToolDisplayName(deleteConfirmDialog.toolId)} 将无法再使用该配置。如需要保留，请先备份或导出配置，再进行删除。
+            </p>
+            <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-lg p-4">
+              <p className="text-xs text-red-700 dark:text-red-300">
+                ⚠️ 注意：删除操作不可撤销，请确认已不再需要该配置。
+              </p>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDeleteConfirmDialog({ open: false, toolId: "", profile: "" })}
+              disabled={deleteDialogInProgress}
+            >
+              取消
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => performDeleteProfile(deleteConfirmDialog.toolId, deleteConfirmDialog.profile)}
+              disabled={deleteDialogInProgress}
+              className="shadow-sm hover:shadow-md transition-all"
+            >
+              {deleteDialogInProgress ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  删除中...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  确认删除
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 配置覆盖确认对话框 */}
+      <Dialog open={configOverrideDialog.open} onOpenChange={(open) => setConfigOverrideDialog({ ...configOverrideDialog, open })}>
+        <DialogContent className="sm:max-w-[500px]" onPointerDown={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-amber-600" />
+              配置已存在
+            </DialogTitle>
+            <DialogDescription>
+              检测到配置 "{configOverrideDialog.targetProfile}" 已存在，如何处理？
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {/* 警告信息 */}
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950 dark:to-orange-950 rounded-lg border border-amber-200 dark:border-amber-800 p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-amber-900 dark:text-amber-100">覆盖确认</h4>
+                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                    当前配置 <span className="font-mono bg-white/50 dark:bg-slate-900/50 px-2 py-0.5 rounded">{configOverrideDialog.targetProfile}</span> 已存在。
+                  </p>
+                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                    直接覆盖会丢失原有配置，建议选择"修改并备份"以保留旧配置的副本。
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* 选项说明 */}
+            <div className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
+              <div className="flex items-start gap-2">
+                <span className="font-semibold min-w-24">取消：</span>
+                <span>放弃本次保存，返回编辑</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="font-semibold min-w-24">仅修改：</span>
+                <span>直接覆盖现有配置（不保留旧配置）</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="font-semibold min-w-24">修改并备份：</span>
+                <span>覆盖前自动创建备份文件（推荐）</span>
+              </div>
+            </div>
+
+            {/* 备份说明 */}
+            <div className="bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <div className="flex items-start gap-2">
+                <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                <div className="text-xs text-blue-700 dark:text-blue-300">
+                  <p className="font-semibold mb-1">关于备份</p>
+                  <p>备份文件将保存在配置目录中，文件名格式为：</p>
+                  <p className="font-mono bg-white/50 dark:bg-slate-900/50 px-2 py-0.5 rounded mt-1">
+                    settings.YYYYMMDD-HHMMSS.json
+                  </p>
+                  <p className="mt-1">您可以在"切换配置"页面的备份管理中查看和恢复备份。</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setConfigOverrideDialog({ open: false, targetProfile: "", willOverride: false });
+              }}
+              disabled={configuring}
+            >
+              取消
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                performConfigSave(false);
+              }}
+              disabled={configuring}
+            >
+              {configuring ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />保存中...</>
+              ) : (
+                <>仅修改</>
+              )}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                performConfigSave(true);
+              }}
+              disabled={configuring}
+              className="shadow-sm hover:shadow-md transition-all bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700"
+            >
+              {configuring ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />保存中...</>
+              ) : (
+                <><Save className="mr-2 h-4 w-4" />修改并备份</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Toaster />
     </div>
   );

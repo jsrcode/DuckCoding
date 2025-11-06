@@ -1,6 +1,9 @@
 use crate::models::Tool;
 use crate::services::InstallerService;
 use anyhow::Result;
+use once_cell::sync::Lazy;
+use regex::Regex;
+use semver::Version;
 use serde::{Deserialize, Serialize};
 
 /// 版本信息
@@ -160,28 +163,32 @@ impl VersionService {
 
     /// 比较版本号
     fn compare_versions(installed: Option<&str>, latest: &str) -> bool {
-        match installed {
-            None => false, // 未安装不算"有更新"，应该是"需要安装"
-            Some(installed) => {
-                // 简单的版本比较（支持语义版本）
-                Self::parse_version(installed) < Self::parse_version(latest)
+        let latest_semver = Self::parse_version(latest);
+
+        match (installed, latest_semver) {
+            (None, _) => false, // 未安装不算"有更新"
+            (Some(installed_str), Some(latest_version)) => {
+                if let Some(installed_version) = Self::parse_version(installed_str) {
+                    installed_version < latest_version
+                } else {
+                    installed_str.trim() != latest.trim()
+                }
             }
+            (Some(installed_str), None) => installed_str.trim() != latest.trim(),
         }
     }
 
     /// 解析版本号为可比较的元组
-    fn parse_version(version: &str) -> (u32, u32, u32) {
-        let clean = version.trim_start_matches('v');
-        let parts: Vec<&str> = clean.split('.').collect();
+    fn parse_version(version: &str) -> Option<Version> {
+        static VERSION_REGEX: Lazy<Regex> = Lazy::new(|| {
+            Regex::new(r"(\d+\.\d+\.\d+(?:-[0-9A-Za-z\.-]+)?)").expect("invalid version regex")
+        });
 
-        let major = parts.get(0).and_then(|s| s.parse().ok()).unwrap_or(0);
-        let minor = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
-        let patch = parts.get(2).and_then(|s| {
-            // 处理 1.2.3-beta 格式
-            s.split('-').next().and_then(|p| p.parse().ok())
-        }).unwrap_or(0);
+        let trimmed = version.trim();
+        let captures = VERSION_REGEX.captures(trimmed)?;
+        let matched = captures.get(1)?.as_str();
 
-        (major, minor, patch)
+        Version::parse(matched).ok()
     }
 
     /// 批量从镜像站获取所有工具版本（优化：一次请求）
@@ -304,20 +311,40 @@ impl Default for VersionService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use semver::Version as SemverVersion;
 
     #[test]
     fn test_version_parsing() {
-        assert_eq!(VersionService::parse_version("1.2.3"), (1, 2, 3));
-        assert_eq!(VersionService::parse_version("v2.0.5"), (2, 0, 5));
-        assert_eq!(VersionService::parse_version("1.2.3-beta"), (1, 2, 3));
+        assert_eq!(
+            VersionService::parse_version("1.2.3").unwrap(),
+            SemverVersion::new(1, 2, 3)
+        );
+        assert_eq!(
+            VersionService::parse_version("v2.0.5").unwrap(),
+            SemverVersion::new(2, 0, 5)
+        );
+        assert_eq!(
+            VersionService::parse_version("1.2.3-beta").unwrap(),
+            SemverVersion::parse("1.2.3-beta").unwrap()
+        );
+        assert_eq!(
+            VersionService::parse_version("rust-v0.55.0").unwrap(),
+            SemverVersion::parse("0.55.0").unwrap()
+        );
+        assert_eq!(
+            VersionService::parse_version("0.13.0-preview.2").unwrap(),
+            SemverVersion::parse("0.13.0-preview.2").unwrap()
+        );
     }
 
     #[test]
     fn test_version_comparison() {
         assert!(VersionService::compare_versions(Some("1.0.0"), "1.0.1"));
         assert!(VersionService::compare_versions(Some("1.0.0"), "2.0.0"));
+        assert!(VersionService::compare_versions(Some("0.12.0"), "0.13.0-preview.2"));
         assert!(!VersionService::compare_versions(Some("2.0.0"), "1.0.0"));
         assert!(!VersionService::compare_versions(Some("1.0.0"), "1.0.0"));
+        assert!(!VersionService::compare_versions(Some("0.55.0"), "rust-v0.55.0"));
         assert!(!VersionService::compare_versions(None, "1.0.0"));
     }
 }

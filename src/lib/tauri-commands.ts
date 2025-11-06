@@ -20,7 +20,7 @@ export interface UpdateResult {
   current_version: string | null;
   latest_version: string | null;
   mirror_version?: string | null;      // 镜像实际可安装的版本
-  mirror_is_stale?: boolean;           // 镜像是否滞后
+  mirror_is_stale?: boolean | null;    // 镜像是否滞后
   tool_id?: string;
 }
 
@@ -82,8 +82,8 @@ export async function checkNodeEnvironment(): Promise<NodeEnvironment> {
   return await invoke<NodeEnvironment>("check_node_environment");
 }
 
-export async function installTool(tool: string, method: string): Promise<InstallResult> {
-  return await invoke<InstallResult>("install_tool", { tool, method });
+export async function installTool(tool: string, method: string, force?: boolean): Promise<InstallResult> {
+  return await invoke<InstallResult>("install_tool", { tool, method, force });
 }
 
 export async function checkUpdate(tool: string): Promise<UpdateResult> {
@@ -94,8 +94,8 @@ export async function checkAllUpdates(): Promise<UpdateResult[]> {
   return await invoke<UpdateResult[]>("check_all_updates");
 }
 
-export async function updateTool(tool: string): Promise<UpdateResult> {
-  return await invoke<UpdateResult>("update_tool", { tool });
+export async function updateTool(tool: string, force?: boolean): Promise<UpdateResult> {
+  return await invoke<UpdateResult>("update_tool", { tool, force });
 }
 
 export async function configureApi(
@@ -103,7 +103,8 @@ export async function configureApi(
   provider: string,
   apiKey: string,
   baseUrl?: string,
-  profileName?: string
+  profileName?: string,
+  createBackup?: boolean
 ): Promise<void> {
   return await invoke<void>("configure_api", {
     tool,
@@ -111,6 +112,7 @@ export async function configureApi(
     apiKey,
     baseUrl,
     profileName,
+    createBackup,
   });
 }
 
@@ -151,4 +153,16 @@ export async function getUsageStats(): Promise<UsageStatsResult> {
 
 export async function getUserQuota(): Promise<UserQuotaResult> {
   return await invoke<UserQuotaResult>("get_user_quota");
+}
+
+export async function listTimestampedBackups(tool: string): Promise<string[]> {
+  return await invoke<string[]>("list_timestamped_backups", { tool });
+}
+
+export async function restoreTimestampedBackup(tool: string, timestamp: string): Promise<void> {
+  return await invoke<void>("restore_timestamped_backup", { tool, timestamp });
+}
+
+export async function deleteTimestampedBackup(tool: string, timestamp: string): Promise<void> {
+  return await invoke<void>("delete_timestamped_backup", { tool, timestamp });
 }
