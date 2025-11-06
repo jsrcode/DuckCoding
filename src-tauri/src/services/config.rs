@@ -3,8 +3,6 @@ use anyhow::{Result, Context};
 use serde_json::{Value, Map};
 use std::collections::HashMap;
 use std::fs;
-use chrono::Local;
-
 /// 配置服务
 pub struct ConfigService;
 
@@ -15,31 +13,7 @@ impl ConfigService {
         api_key: &str,
         base_url: &str,
         profile_name: Option<&str>,
-        create_timestamped_backup: bool,
     ) -> Result<()> {
-        // 如果需要创建时间戳备份，且目标配置存在，先备份
-        if create_timestamped_backup {
-            if let Some(profile) = profile_name {
-                // 检查命名配置是否存在
-                let backup_exists = match tool.id.as_str() {
-                    "claude-code" => tool.backup_path(profile).exists(),
-                    "codex" => tool.config_dir.join(format!("auth.{}.json", profile)).exists(),
-                    "gemini-cli" => tool.config_dir.join(format!(".env.{}", profile)).exists(),
-                    _ => false,
-                };
-
-                if backup_exists {
-                    Self::create_timestamped_backup(tool, profile)?;
-                }
-            } else {
-                // 检查主配置是否存在
-                let main_config_exists = tool.config_dir.join(&tool.config_file).exists();
-                if main_config_exists {
-                    Self::create_timestamped_backup(tool, "main")?;
-                }
-            }
-        }
-
         match tool.id.as_str() {
             "claude-code" => Self::apply_claude_config(tool, api_key, base_url)?,
             "codex" => Self::apply_codex_config(tool, api_key, base_url)?,
@@ -47,7 +21,7 @@ impl ConfigService {
             _ => anyhow::bail!("未知工具: {}", tool.id),
         }
 
-        // 保存备份配置文件（命名配置）
+        // 保存命名配置的备份副本
         if let Some(profile) = profile_name {
             Self::save_backup(tool, profile)?;
         }
@@ -765,228 +739,4 @@ impl ConfigService {
         Ok(())
     }
 
-    /// 创建时间戳备份（用于防止意外覆盖）
-    pub fn create_timestamped_backup(tool: &Tool, source_profile: &str) -> Result<()> {
-        let timestamp = Local::now().format("%Y%m%d-%H%M%S").to_string();
-
-        match tool.id.as_str() {
-            "claude-code" => {
-                let source_path = if source_profile == "main" {
-                    tool.config_dir.join(&tool.config_file)
-                } else {
-                    tool.backup_path(source_profile)
-                };
-
-                if !source_path.exists() {
-                    return Ok(()); // 源文件不存在，无需备份
-                }
-
-                let backup_path = tool.config_dir.join(format!("settings.{}.json", timestamp));
-                fs::copy(&source_path, &backup_path)?;
-            }
-            "codex" => {
-                let source_auth = if source_profile == "main" {
-                    tool.config_dir.join("auth.json")
-                } else {
-                    tool.config_dir.join(format!("auth.{}.json", source_profile))
-                };
-
-                let source_config = if source_profile == "main" {
-                    tool.config_dir.join("config.toml")
-                } else {
-                    tool.config_dir.join(format!("config.{}.toml", source_profile))
-                };
-
-                if source_auth.exists() {
-                    let backup_auth = tool.config_dir.join(format!("auth.{}.json", timestamp));
-                    fs::copy(&source_auth, &backup_auth)?;
-                }
-
-                if source_config.exists() {
-                    let backup_config = tool.config_dir.join(format!("config.{}.toml", timestamp));
-                    fs::copy(&source_config, &backup_config)?;
-                }
-            }
-            "gemini-cli" => {
-                let source_env = if source_profile == "main" {
-                    tool.config_dir.join(".env")
-                } else {
-                    tool.config_dir.join(format!(".env.{}", source_profile))
-                };
-
-                if source_env.exists() {
-                    let backup_env = tool.config_dir.join(format!(".env.{}", timestamp));
-                    fs::copy(&source_env, &backup_env)?;
-                }
-            }
-            _ => anyhow::bail!("未知工具: {}", tool.id),
-        }
-
-        Ok(())
-    }
-
-    /// 列出所有时间戳备份
-    pub fn list_timestamped_backups(tool: &Tool) -> Result<Vec<String>> {
-        if !tool.config_dir.exists() {
-            return Ok(vec![]);
-        }
-
-        let entries = fs::read_dir(&tool.config_dir)?;
-        let mut backups = Vec::new();
-
-        // 时间戳格式正则: YYYYMMDD-HHMMSS (例如 20250218-153045)
-        let timestamp_pattern = regex::Regex::new(r"^\d{8}-\d{6}$")
-            .unwrap();
-
-        for entry in entries {
-            let entry = entry?;
-            let filename = entry.file_name();
-            let filename_str = filename.to_string_lossy();
-
-            // 检测时间戳格式的备份文件
-            let is_timestamped_backup = match tool.id.as_str() {
-                "claude-code" => {
-                    // settings.YYYYMMDD-HHMMSS.json
-                    if filename_str.starts_with("settings.") && filename_str.ends_with(".json") {
-                        let timestamp = filename_str
-                            .trim_start_matches("settings.")
-                            .trim_end_matches(".json");
-                        timestamp_pattern.is_match(timestamp)
-                    } else {
-                        false
-                    }
-                }
-                "codex" => {
-                    // auth.YYYYMMDD-HHMMSS.json 或 config.YYYYMMDD-HHMMSS.toml
-                    if filename_str.starts_with("auth.") && filename_str.ends_with(".json") {
-                        let timestamp = filename_str
-                            .trim_start_matches("auth.")
-                            .trim_end_matches(".json");
-                        timestamp_pattern.is_match(timestamp)
-                    } else if filename_str.starts_with("config.") && filename_str.ends_with(".toml") {
-                        let timestamp = filename_str
-                            .trim_start_matches("config.")
-                            .trim_end_matches(".toml");
-                        timestamp_pattern.is_match(timestamp)
-                    } else {
-                        false
-                    }
-                }
-                "gemini-cli" => {
-                    // .env.YYYYMMDD-HHMMSS
-                    if filename_str.starts_with(".env.") {
-                        let timestamp = filename_str.trim_start_matches(".env.");
-                        timestamp_pattern.is_match(timestamp)
-                    } else {
-                        false
-                    }
-                }
-                _ => false,
-            };
-
-            if is_timestamped_backup {
-                // 提取时间戳
-                let timestamp = match tool.id.as_str() {
-                    "claude-code" => filename_str
-                        .trim_start_matches("settings.")
-                        .trim_end_matches(".json")
-                        .to_string(),
-                "codex" => filename_str
-                        .trim_start_matches("auth.")
-                        .trim_start_matches("config.")
-                        .trim_end_matches(".json")
-                        .trim_end_matches(".toml")
-                        .to_string(),
-                    "gemini-cli" => filename_str
-                        .trim_start_matches(".env.")
-                        .to_string(),
-                    _ => continue,
-                };
-
-                if !backups.contains(&timestamp) {
-                    backups.push(timestamp);
-                }
-            }
-        }
-
-        // 按时间戳倒序排列（最新的在前）
-        backups.sort_by(|a, b| b.cmp(a));
-        Ok(backups)
-    }
-
-    /// 恢复时间戳备份
-    pub fn restore_timestamped_backup(tool: &Tool, timestamp: &str) -> Result<()> {
-        match tool.id.as_str() {
-            "claude-code" => {
-                let backup_path = tool.config_dir.join(format!("settings.{}.json", timestamp));
-                let active_path = tool.config_dir.join(&tool.config_file);
-
-                if !backup_path.exists() {
-                    anyhow::bail!("备份文件不存在: {:?}", backup_path);
-                }
-
-                fs::copy(&backup_path, &active_path)?;
-            }
-            "codex" => {
-                let backup_auth = tool.config_dir.join(format!("auth.{}.json", timestamp));
-                let backup_config = tool.config_dir.join(format!("config.{}.toml", timestamp));
-
-                let active_auth = tool.config_dir.join("auth.json");
-                let active_config = tool.config_dir.join("config.toml");
-
-                if backup_auth.exists() {
-                    fs::copy(&backup_auth, &active_auth)?;
-                }
-
-                if backup_config.exists() {
-                    fs::copy(&backup_config, &active_config)?;
-                }
-            }
-            "gemini-cli" => {
-                let backup_env = tool.config_dir.join(format!(".env.{}", timestamp));
-                let active_env = tool.config_dir.join(".env");
-
-                if !backup_env.exists() {
-                    anyhow::bail!("备份文件不存在: {:?}", backup_env);
-                }
-
-                fs::copy(&backup_env, &active_env)?;
-            }
-            _ => anyhow::bail!("未知工具: {}", tool.id),
-        }
-
-        Ok(())
-    }
-
-    /// 删除时间戳备份
-    pub fn delete_timestamped_backup(tool: &Tool, timestamp: &str) -> Result<()> {
-        match tool.id.as_str() {
-            "claude-code" => {
-                let backup_path = tool.config_dir.join(format!("settings.{}.json", timestamp));
-                if backup_path.exists() {
-                    fs::remove_file(backup_path)?;
-                }
-            }
-            "codex" => {
-                let backup_auth = tool.config_dir.join(format!("auth.{}.json", timestamp));
-                let backup_config = tool.config_dir.join(format!("config.{}.toml", timestamp));
-
-                if backup_auth.exists() {
-                    fs::remove_file(backup_auth)?;
-                }
-                if backup_config.exists() {
-                    fs::remove_file(backup_config)?;
-                }
-            }
-            "gemini-cli" => {
-                let backup_env = tool.config_dir.join(format!(".env.{}", timestamp));
-                if backup_env.exists() {
-                    fs::remove_file(backup_env)?;
-                }
-            }
-            _ => anyhow::bail!("未知工具: {}", tool.id),
-        }
-
-        Ok(())
-    }
 }

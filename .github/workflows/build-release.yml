@@ -66,7 +66,16 @@ jobs:
 
       - name: Build (macOS Universal)
         if: matrix.platform == 'macos-latest'
-        run: npm run tauri:build -- --target universal-apple-darwin
+        run: npm run tauri:build -- --target universal-apple-darwin --bundles app
+
+      - name: Create DMG (macOS Universal)
+        if: matrix.platform == 'macos-latest'
+        run: |
+          APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/DuckCoding.app"
+          DMG_DIR="src-tauri/target/universal-apple-darwin/release/bundle/dmg"
+          APP_VERSION=$(jq -r '.version' src-tauri/tauri.conf.json)
+          DMG_PATH="$DMG_DIR/DuckCoding_${APP_VERSION}_universal.dmg"
+          ./scripts/make-dmg.sh "$APP_PATH" "$DMG_PATH" "DuckCoding"
 
       - name: Build (Windows/Linux)
         if: matrix.platform != 'macos-latest'

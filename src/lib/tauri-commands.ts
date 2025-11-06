@@ -103,8 +103,7 @@ export async function configureApi(
   provider: string,
   apiKey: string,
   baseUrl?: string,
-  profileName?: string,
-  createBackup?: boolean
+  profileName?: string
 ): Promise<void> {
   return await invoke<void>("configure_api", {
     tool,
@@ -112,7 +111,6 @@ export async function configureApi(
     apiKey,
     baseUrl,
     profileName,
-    createBackup,
   });
 }
 
@@ -153,16 +151,4 @@ export async function getUsageStats(): Promise<UsageStatsResult> {
 
 export async function getUserQuota(): Promise<UserQuotaResult> {
   return await invoke<UserQuotaResult>("get_user_quota");
-}
-
-export async function listTimestampedBackups(tool: string): Promise<string[]> {
-  return await invoke<string[]>("list_timestamped_backups", { tool });
-}
-
-export async function restoreTimestampedBackup(tool: string, timestamp: string): Promise<void> {
-  return await invoke<void>("restore_timestamped_backup", { tool, timestamp });
-}
-
-export async function deleteTimestampedBackup(tool: string, timestamp: string): Promise<void> {
-  return await invoke<void>("delete_timestamped_backup", { tool, timestamp });
 }

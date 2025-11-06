@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CheckCircle2, XCircle, Package, Settings as SettingsIcon, RefreshCw, LayoutDashboard, Loader2, AlertCircle, Save, ExternalLink, Info, ArrowRightLeft, Key, Sparkles, BarChart3, GripVertical, Trash2 } from "lucide-react";
-import { checkInstallations, checkNodeEnvironment, installTool, checkAllUpdates, updateTool, configureApi, listProfiles, switchProfile, deleteProfile, getActiveConfig, saveGlobalConfig, getGlobalConfig, generateApiKeyForTool, getUsageStats, getUserQuota, listTimestampedBackups, restoreTimestampedBackup, deleteTimestampedBackup, type ToolStatus, type NodeEnvironment, type ActiveConfig, type GlobalConfig, type UsageStatsResult, type UserQuotaResult } from "@/lib/tauri-commands";
+import { checkInstallations, checkNodeEnvironment, installTool, checkAllUpdates, updateTool, configureApi, listProfiles, switchProfile, deleteProfile, getActiveConfig, saveGlobalConfig, getGlobalConfig, generateApiKeyForTool, getUsageStats, getUserQuota, type ToolStatus, type NodeEnvironment, type ActiveConfig, type GlobalConfig, type UsageStatsResult, type UserQuotaResult } from "@/lib/tauri-commands";
 import { useToast } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
 import {
@@ -165,11 +165,6 @@ function App() {
   const [activeConfigs, setActiveConfigs] = useState<Record<string, ActiveConfig>>({});
   const [selectedSwitchTab, setSelectedSwitchTab] = useState<string>("");  // 切换配置页面的Tab选择
 
-  // 备份管理状态
-  const [timestampedBackups, setTimestampedBackups] = useState<Record<string, string[]>>({});
-  const [loadingBackups, setLoadingBackups] = useState(false);
-  const [restoringBackup, setRestoringBackup] = useState<string | null>(null);
-  const [deletingBackup, setDeletingBackup] = useState<string | null>(null);
   const [deleteConfirmDialog, setDeleteConfirmDialog] = useState<{
     open: boolean;
     toolId: string;
@@ -422,9 +417,7 @@ function App() {
       // 加载配置列表以支持覆盖检测
       loadAllProfiles();
 
-      if (activeTab === "switch") {
-        loadTimestampedBackups(); // 切换配置页面额外加载备份列表
-      }
+      // 备份功能已移除，无需额外加载
     }
   }, [activeTab, tools, selectedTool]);
 
@@ -507,100 +500,6 @@ function App() {
   };
 
   // 加载时间戳备份列表
-  const loadTimestampedBackups = async () => {
-    const installedTools = tools.filter(t => t.installed);
-    const backupData: Record<string, string[]> = {};
-
-    setLoadingBackups(true);
-
-    for (const tool of installedTools) {
-      try {
-        const toolBackups = await listTimestampedBackups(tool.id);
-        backupData[tool.id] = toolBackups;
-      } catch (error) {
-        console.error("Failed to load backups for " + tool.id, error);
-        backupData[tool.id] = [];
-      }
-    }
-
-    setTimestampedBackups(backupData);
-    setLoadingBackups(false);
-  };
-
-  // 恢复备份
-  const handleRestoreBackup = async (toolId: string, timestamp: string) => {
-    if (!confirm(`确定要恢复到备份 "${timestamp}" 吗？\n\n当前配置将被覆盖。`)) {
-      return;
-    }
-
-    try {
-      setRestoringBackup(timestamp);
-      await restoreTimestampedBackup(toolId, timestamp);
-
-      // 重新加载配置和备份列表
-      await loadAllProfiles();
-
-      toast({
-        title: "恢复成功",
-        description: `已恢复到备份 ${timestamp}\n\n请重启相关 CLI 工具以使新配置生效。`
-      });
-    } catch (error) {
-      console.error("Failed to restore backup:", error);
-      toast({
-        title: "恢复失败",
-        description: String(error),
-        variant: "destructive"
-      });
-    } finally {
-      setRestoringBackup(null);
-    }
-  };
-
-  // 删除备份
-  const handleDeleteBackup = async (toolId: string, timestamp: string) => {
-    if (!confirm(`确定要删除备份 "${timestamp}" 吗？\n\n此操作不可恢复。`)) {
-      return;
-    }
-
-    try {
-      setDeletingBackup(timestamp);
-      await deleteTimestampedBackup(toolId, timestamp);
-
-      // 重新加载备份列表
-      await loadTimestampedBackups();
-
-      toast({
-        title: "删除成功",
-        description: "备份已删除"
-      });
-    } catch (error) {
-      console.error("Failed to delete backup:", error);
-      toast({
-        title: "删除失败",
-        description: String(error),
-        variant: "destructive"
-      });
-    } finally {
-      setDeletingBackup(null);
-    }
-  };
-
-  // 格式化时间戳显示
-  const formatTimestamp = (timestamp: string): string => {
-    // timestamp格式: YYYYMMDD-HHMMSS
-    try {
-      const year = timestamp.substring(0, 4);
-      const month = timestamp.substring(4, 6);
-      const day = timestamp.substring(6, 8);
-      const hour = timestamp.substring(9, 11);
-      const minute = timestamp.substring(11, 13);
-      const second = timestamp.substring(13, 15);
-      return `${year}年${month}月${day}日 ${hour}:${minute}:${second}`;
-    } catch {
-      return timestamp;
-    }
-  };
-
   // 加载全局配置
   const loadGlobalConfig = async () => {
     try {
@@ -1001,11 +900,11 @@ function App() {
     }
 
     // 执行保存配置（从确认对话框调用或无需确认时）
-    await performConfigSave(false);
+    await performConfigSave();
   };
 
   // 实际执行配置保存的函数
-  const performConfigSave = async (withBackup: boolean) => {
+  const performConfigSave = async () => {
     try {
       setConfiguring(true);
 
@@ -1015,8 +914,7 @@ function App() {
         provider,
         apiKey,
         provider === "custom" ? baseUrl.trim() : undefined,
-        profileName || undefined,
-        withBackup
+        profileName || undefined
       );
 
       // 清空表单
@@ -1034,7 +932,7 @@ function App() {
       const toolName = selectedTool === 'claude-code' ? 'Claude Code' : selectedTool === 'codex' ? 'CodeX' : 'Gemini CLI';
       toast({
         title: "配置保存成功",
-        description: `${toolName} 配置保存成功！${profileName ? `\n配置名称: ${profileName}` : ''}${withBackup ? '\n已创建备份' : ''}`
+        description: `${toolName} 配置保存成功！${profileName ? `\n配置名称: ${profileName}` : ''}`
       });
     } catch (error) {
       console.error("Failed to configure API:", error);
@@ -1869,81 +1767,6 @@ function App() {
                                 </div>
                               )}
 
-                              {/* 备份管理 */}
-                              <div className="mt-8">
-                                <div className="flex items-center justify-between mb-4">
-                                  <Label className="text-base font-semibold">配置备份</Label>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={loadTimestampedBackups}
-                                    disabled={loadingBackups}
-                                    className="shadow-sm"
-                                  >
-                                    {loadingBackups ? (
-                                      <><Loader2 className="mr-2 h-3 w-3 animate-spin" />加载中...</>
-                                    ) : (
-                                      <><RefreshCw className="mr-2 h-3 w-3" />刷新</>
-                                    )}
-                                  </Button>
-                                </div>
-
-                                {loadingBackups ? (
-                                  <div className="text-center py-8 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
-                                    <Loader2 className="h-8 w-8 mx-auto animate-spin text-primary" />
-                                  </div>
-                                ) : (timestampedBackups[tool.id] && timestampedBackups[tool.id].length > 0) ? (
-                                  <div className="space-y-2">
-                                    {timestampedBackups[tool.id].map(timestamp => (
-                                      <div
-                                        key={timestamp}
-                                        className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border hover:border-amber-300 dark:hover:border-amber-700 transition-colors"
-                                      >
-                                        <div className="flex items-center gap-3">
-                                          <AlertCircle className="h-4 w-4 text-amber-500" />
-                                          <div>
-                                            <span className="font-medium text-slate-900 dark:text-slate-100">{formatTimestamp(timestamp)}</span>
-                                            <p className="text-xs text-muted-foreground mt-0.5">备份时间戳: {timestamp}</p>
-                                          </div>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => handleRestoreBackup(tool.id, timestamp)}
-                                            disabled={restoringBackup === timestamp || deletingBackup === timestamp}
-                                            className="shadow-sm hover:shadow-md transition-all"
-                                          >
-                                            {restoringBackup === timestamp ? (
-                                              <><Loader2 className="h-3 w-3 mr-1 animate-spin" />恢复中...</>
-                                            ) : (
-                                              <><RefreshCw className="h-3 w-3 mr-1" />恢复</>
-                                            )}
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant="destructive"
-                                            onClick={() => handleDeleteBackup(tool.id, timestamp)}
-                                            disabled={restoringBackup === timestamp || deletingBackup === timestamp}
-                                            className="shadow-sm hover:shadow-md transition-all"
-                                          >
-                                            {deletingBackup === timestamp ? (
-                                              <><Loader2 className="h-3 w-3 mr-1 animate-spin" />删除中...</>
-                                            ) : (
-                                              <><Trash2 className="h-3 w-3 mr-1" />删除</>
-                                            )}
-                                          </Button>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <div className="text-center py-6 bg-slate-50 dark:bg-slate-800/50 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700">
-                                    <p className="text-sm text-muted-foreground">暂无配置备份</p>
-                                    <p className="text-xs text-muted-foreground mt-1">保存配置时选择"修改并备份"会自动创建时间戳备份</p>
-                                  </div>
-                                )}
-                              </div>
                             </CardContent>
                           </Card>
                         </TabsContent>
@@ -2285,7 +2108,7 @@ function App() {
               配置已存在
             </DialogTitle>
             <DialogDescription>
-              检测到配置 "{configOverrideDialog.targetProfile}" 已存在，如何处理？
+              检测到配置 "{configOverrideDialog.targetProfile}" 已存在，是否覆盖？
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -2296,45 +2119,15 @@ function App() {
                 <div className="space-y-2">
                   <h4 className="font-semibold text-amber-900 dark:text-amber-100">覆盖确认</h4>
                   <p className="text-sm text-amber-800 dark:text-amber-200">
-                    当前配置 <span className="font-mono bg-white/50 dark:bg-slate-900/50 px-2 py-0.5 rounded">{configOverrideDialog.targetProfile}</span> 已存在。
-                  </p>
-                  <p className="text-sm text-amber-800 dark:text-amber-200">
-                    直接覆盖会丢失原有配置，建议选择"修改并备份"以保留旧配置的副本。
+                    当前配置 <span className="font-mono bg-white/50 dark:bg-slate-900/50 px-2 py-0.5 rounded">{configOverrideDialog.targetProfile}</span> 已存在。继续保存将覆盖原有内容。
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* 选项说明 */}
-            <div className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
-              <div className="flex items-start gap-2">
-                <span className="font-semibold min-w-24">取消：</span>
-                <span>放弃本次保存，返回编辑</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="font-semibold min-w-24">仅修改：</span>
-                <span>直接覆盖现有配置（不保留旧配置）</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="font-semibold min-w-24">修改并备份：</span>
-                <span>覆盖前自动创建备份文件（推荐）</span>
-              </div>
-            </div>
-
-            {/* 备份说明 */}
-            <div className="bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-              <div className="flex items-start gap-2">
-                <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-                <div className="text-xs text-blue-700 dark:text-blue-300">
-                  <p className="font-semibold mb-1">关于备份</p>
-                  <p>备份文件将保存在配置目录中，文件名格式为：</p>
-                  <p className="font-mono bg-white/50 dark:bg-slate-900/50 px-2 py-0.5 rounded mt-1">
-                    settings.YYYYMMDD-HHMMSS.json
-                  </p>
-                  <p className="mt-1">您可以在"切换配置"页面的备份管理中查看和恢复备份。</p>
-                </div>
-              </div>
-            </div>
+            <p className="text-sm text-slate-700 dark:text-slate-300">
+              如果需要保留旧配置，可在覆盖前手动复制信息或另存为其他名称。
+            </p>
           </div>
           <DialogFooter className="gap-2">
             <Button
@@ -2349,30 +2142,17 @@ function App() {
             </Button>
             <Button
               type="button"
-              variant="secondary"
+              variant="destructive"
               onClick={() => {
-                performConfigSave(false);
+                performConfigSave();
               }}
               disabled={configuring}
+              className="shadow-sm hover:shadow-md transition-all"
             >
               {configuring ? (
                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" />保存中...</>
               ) : (
-                <>仅修改</>
-              )}
-            </Button>
-            <Button
-              type="button"
-              onClick={() => {
-                performConfigSave(true);
-              }}
-              disabled={configuring}
-              className="shadow-sm hover:shadow-md transition-all bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700"
-            >
-              {configuring ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />保存中...</>
-              ) : (
-                <><Save className="mr-2 h-4 w-4" />修改并备份</>
+                <><Save className="mr-2 h-4 w-4" />确认覆盖</>
               )}
             </Button>
           </DialogFooter>

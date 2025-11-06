@@ -362,7 +362,7 @@ async fn update_tool(tool: String, force: Option<bool>) -> Result<UpdateResult, 
 }
 
 #[tauri::command]
-async fn configure_api(tool: String, _provider: String, api_key: String, base_url: Option<String>, profile_name: Option<String>, create_backup: Option<bool>) -> Result<(), String> {
+async fn configure_api(tool: String, _provider: String, api_key: String, base_url: Option<String>, profile_name: Option<String>) -> Result<(), String> {
     #[cfg(debug_assertions)]
     println!("Configuring {} (using ConfigService)", tool);
 
@@ -384,7 +384,6 @@ async fn configure_api(tool: String, _provider: String, api_key: String, base_ur
         &api_key,
         &base_url_str,
         profile_name.as_deref(),
-        create_backup.unwrap_or(false),
     ).map_err(|e| e.to_string())?;
 
     Ok(())
@@ -435,58 +434,6 @@ async fn delete_profile(tool: String, profile: String) -> Result<(), String> {
 
     #[cfg(debug_assertions)]
     println!("Successfully deleted profile: {}", profile);
-
-    Ok(())
-}
-
-#[tauri::command]
-async fn list_timestamped_backups(tool: String) -> Result<Vec<String>, String> {
-    #[cfg(debug_assertions)]
-    println!("Listing timestamped backups for: {}", tool);
-
-    // 获取工具定义
-    let tool_obj = Tool::by_id(&tool)
-        .ok_or_else(|| format!("❌ 未知的工具: {}", tool))?;
-
-    // 使用 ConfigService 列出时间戳备份
-    ConfigService::list_timestamped_backups(&tool_obj)
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn restore_timestamped_backup(tool: String, timestamp: String) -> Result<(), String> {
-    #[cfg(debug_assertions)]
-    println!("Restoring timestamped backup: tool={}, timestamp={}", tool, timestamp);
-
-    // 获取工具定义
-    let tool_obj = Tool::by_id(&tool)
-        .ok_or_else(|| format!("❌ 未知的工具: {}", tool))?;
-
-    // 使用 ConfigService 恢复时间戳备份
-    ConfigService::restore_timestamped_backup(&tool_obj, &timestamp)
-        .map_err(|e| e.to_string())?;
-
-    #[cfg(debug_assertions)]
-    println!("Successfully restored backup: {}", timestamp);
-
-    Ok(())
-}
-
-#[tauri::command]
-async fn delete_timestamped_backup(tool: String, timestamp: String) -> Result<(), String> {
-    #[cfg(debug_assertions)]
-    println!("Deleting timestamped backup: tool={}, timestamp={}", tool, timestamp);
-
-    // 获取工具定义
-    let tool_obj = Tool::by_id(&tool)
-        .ok_or_else(|| format!("❌ 未知的工具: {}", tool))?;
-
-    // 使用 ConfigService 删除时间戳备份
-    ConfigService::delete_timestamped_backup(&tool_obj, &timestamp)
-        .map_err(|e| e.to_string())?;
-
-    #[cfg(debug_assertions)]
-    println!("Successfully deleted backup: {}", timestamp);
 
     Ok(())
 }
@@ -1467,9 +1414,6 @@ fn main() {
             list_profiles,
             switch_profile,
             delete_profile,
-            list_timestamped_backups,
-            restore_timestamped_backup,
-            delete_timestamped_backup,
             get_active_config,
             save_global_config,
             get_global_config,
