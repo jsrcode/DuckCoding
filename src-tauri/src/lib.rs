@@ -1,5 +1,6 @@
 // lib.rs - 暴露服务层给 CLI 和 GUI 使用
 
+pub mod http_client;
 pub mod models;
 pub mod services;
 pub mod utils;

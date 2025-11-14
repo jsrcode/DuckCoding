@@ -130,7 +130,11 @@ impl VersionService {
         &self,
         tool_id: &str,
     ) -> Result<(String, Option<String>, bool)> {
-        let response = reqwest::get(&self.mirror_api_url)
+        // 统一通过带代理的 Client 进行请求
+        let client = crate::http_client::build_client().map_err(|e| anyhow::anyhow!(e))?;
+        let response = client
+            .get(&self.mirror_api_url)
+            .send()
             .await?
             .json::<MirrorApiResponse>()
             .await?;
@@ -198,7 +202,9 @@ impl VersionService {
         #[cfg(debug_assertions)]
         println!("🔍 正在请求镜像站 API: {}", &self.mirror_api_url);
 
-        let response = reqwest::get(&self.mirror_api_url).await?;
+        // 统一通过带代理的 Client 进行请求
+        let client = crate::http_client::build_client().map_err(|e| anyhow::anyhow!(e))?;
+        let response = client.get(&self.mirror_api_url).send().await?;
 
         #[cfg(debug_assertions)]
         println!("✅ 收到响应，状态码: {}", response.status());

@@ -1451,19 +1451,9 @@ fn hide_window_to_tray<R: Runtime>(window: &WebviewWindow<R>) {
     }
 }
 
-// Helper: build reqwest client that respects the current proxy if configured
+// Helper: 统一使用库中的 HTTP 客户端构建逻辑（支持 SOCKS5 等代理）
 fn build_reqwest_client() -> Result<reqwest::Client, String> {
-    if let Some(proxy_url) = duckcoding::ProxyService::get_current_proxy() {
-        match reqwest::Proxy::all(&proxy_url) {
-            Ok(proxy) => reqwest::Client::builder()
-                .proxy(proxy)
-                .build()
-                .map_err(|e| format!("Failed to build reqwest client: {}", e)),
-            Err(e) => Err(format!("Invalid proxy URL: {}", e)),
-        }
-    } else {
-        Ok(reqwest::Client::new())
-    }
+    duckcoding::http_client::build_client()
 }
 
 fn main() {
