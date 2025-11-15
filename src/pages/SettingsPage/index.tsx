@@ -44,6 +44,8 @@ export function SettingsPage({ globalConfig, onConfigChange, updateInfo, onUpdat
     setProxyPassword,
     proxyTestUrl,
     setProxyTestUrl,
+    proxyBypassUrls,
+    setProxyBypassUrls,
     transparentProxyEnabled,
     setTransparentProxyEnabled,
     transparentProxyPort,
@@ -204,6 +206,8 @@ export function SettingsPage({ globalConfig, onConfigChange, updateInfo, onUpdat
             setProxyTestUrl={setProxyTestUrl}
             testingProxy={testingProxy}
             onTestProxy={handleTestProxy}
+            proxyBypassUrls={proxyBypassUrls}
+            setProxyBypassUrls={setProxyBypassUrls}
           />
         </TabsContent>
 
