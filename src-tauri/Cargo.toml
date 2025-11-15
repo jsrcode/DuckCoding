@@ -34,6 +34,11 @@ pin-project-lite = "0.2"
 bytes = "1"
 futures-util = "0.3"
 
+# 日志系统依赖
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json", "registry", "local-time"] }
+tracing-appender = "0.2"
+
 [target.'cfg(target_os = "macos")'.dependencies]
 cocoa = "0.26"
 objc = "0.2"

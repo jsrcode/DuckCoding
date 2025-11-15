@@ -61,7 +61,7 @@ impl TransparentProxyService {
             println!("⚠️ 警告：透明代理启动时缺少Base URL配置，将在运行时拦截请求");
         }
 
-        println!("✅ 透明代理配置加载完成");
+        tracing::info!("✅ 透明代理配置加载完成");
         if !config.target_api_key.is_empty() {
             println!(
                 "   目标 API Key: {}***",
@@ -100,7 +100,7 @@ impl TransparentProxyService {
 
         let listener = TcpListener::bind(addr).await.context("绑定代理端口失败")?;
 
-        println!("🚀 透明代理启动成功: http://{}", addr);
+        tracing::info!("🚀 透明代理启动成功: http://{}", addr);
 
         let config_clone = Arc::clone(&self.config);
         let port = self.port; // 保存端口信息

@@ -495,7 +495,7 @@ async fn configure_api(
     profile_name: Option<String>,
 ) -> Result<(), String> {
     #[cfg(debug_assertions)]
-    println!("Configuring {} (using ConfigService)", tool);
+    tracing::info!("配置工具 {} (使用 ConfigService)", tool);
 
     // 获取工具定义
     let tool_obj = Tool::by_id(&tool).ok_or_else(|| format!("❌ 未知的工具: {}", tool))?;
@@ -1753,17 +1753,25 @@ async fn update_transparent_proxy_config(
         .await
         .map_err(|e| format!("更新代理配置失败: {}", e))?;
 
-    println!("🔄 透明代理配置已更新:");
-    println!(
-        "   API Key: {}...",
-        &new_api_key[..4.min(new_api_key.len())]
+    tracing::info!("🔄 透明代理配置已更新:");
+    tracing::info!(
+        api_key = %&new_api_key[..4.min(new_api_key.len())],
+        base_url = %new_base_url,
+        "透明代理配置详情"
     );
-    println!("   Base URL: {}", new_base_url);
 
     Ok("✅ 透明代理配置已更新，无需重启".to_string())
 }
 
 fn main() {
+    // 初始化日志系统（必须在其他操作之前）
+    if let Err(e) = duckcoding::logging::init_global_logger() {
+        eprintln!("初始化日志系统失败: {}", e);
+        // 继续运行，但禁用日志功能
+    } else {
+        tracing::info!("DuckCoding 应用启动");
+    }
+
     // 创建透明代理服务实例
     let transparent_proxy_port = 8787; // 默认端口，实际会从配置读取
     let transparent_proxy_service = TransparentProxyService::new(transparent_proxy_port);
@@ -1781,7 +1789,7 @@ fn main() {
                         if let Ok(cfg) = serde_json::from_str::<GlobalConfig>(&content) {
                             // 应用代理到环境变量（进程级）
                             duckcoding::ProxyService::apply_proxy_from_config(&cfg);
-                            println!("Applied proxy from config at startup");
+                            tracing::info!("启动时从配置应用代理设置");
                         }
                     }
                 }
@@ -1789,7 +1797,7 @@ fn main() {
 
             // 设置工作目录到项目根目录（跨平台支持）
             if let Ok(resource_dir) = app.path().resource_dir() {
-                println!("Resource dir: {:?}", resource_dir);
+                tracing::debug!("资源目录: {:?}", resource_dir);
 
                 if cfg!(debug_assertions) {
                     // 开发模式：resource_dir 是 src-tauri/target/debug
@@ -1800,7 +1808,7 @@ fn main() {
                         .and_then(|p| p.parent()) // 项目根目录
                         .unwrap_or(&resource_dir);
 
-                    println!("Development mode, setting dir to: {:?}", project_root);
+                    tracing::debug!("开发模式，设置工作目录为: {:?}", project_root);
                     let _ = env::set_current_dir(project_root);
                 } else {
                     // 生产模式：跨平台支持
@@ -1817,7 +1825,7 @@ fn main() {
                         // Linux: 通常在 /usr/share/appname 或类似位置
                         resource_dir.parent().unwrap_or(&resource_dir)
                     };
-                    println!("Production mode, setting dir to: {:?}", parent_dir);
+                    tracing::debug!("生产模式，设置工作目录为: {:?}", parent_dir);
                     let _ = env::set_current_dir(parent_dir);
                 }
             }
@@ -1941,6 +1949,18 @@ fn main() {
             stop_transparent_proxy,
             get_transparent_proxy_status,
             update_transparent_proxy_config,
+            // 日志系统相关命令
+            set_log_level,
+            get_log_level,
+            get_log_config,
+            update_log_config,
+            get_log_stats,
+            flush_logs,
+            get_available_log_levels,
+            test_logging,
+            open_log_directory,
+            cleanup_old_logs,
+            get_recent_logs,
         ]);
 
     // 使用自定义事件循环处理 macOS Reopen 事件
@@ -2105,4 +2125,259 @@ async fn test_proxy_request(
             error: Some(e.to_string()),
         }),
     }
+}
+
+// 日志系统相关命令
+
+/// 设置日志级别
+#[tauri::command]
+async fn set_log_level(level: String) -> Result<(), String> {
+    use duckcoding::logging::config::LoggingConfig;
+
+    let parsed_level = LoggingConfig::parse_level(&level)
+        .map_err(|e| format!("无效的日志级别: {}", e))?;
+
+    duckcoding::logging::logger::set_global_log_level(parsed_level)
+        .map_err(|e| format!("设置日志级别失败: {}", e))?;
+
+    tracing::info!("日志级别已通过命令设置为: {}", parsed_level);
+    Ok(())
+}
+
+/// 获取当前日志级别
+#[tauri::command]
+async fn get_log_level() -> Result<String, String> {
+    let current_level = duckcoding::logging::logger::LogManager::get_current_level();
+    Ok(current_level.to_string())
+}
+
+/// 获取当前日志配置
+#[tauri::command]
+async fn get_log_config() -> Result<duckcoding::logging::config::LoggingConfig, String> {
+    let manager = duckcoding::logging::logger::get_global_log_manager()
+        .ok_or_else(|| "日志管理器未初始化".to_string())?;
+
+    let config = manager
+        .lock()
+        .map_err(|e| format!("无法获取日志管理器锁: {}", e))?
+        .config
+        .clone();
+
+    Ok(config)
+}
+
+/// 更新日志配置
+#[tauri::command]
+async fn update_log_config(config: duckcoding::logging::config::LoggingConfig) -> Result<(), String> {
+    let manager = duckcoding::logging::logger::get_global_log_manager()
+        .ok_or_else(|| "日志管理器未初始化".to_string())?;
+
+    let mut manager_guard = manager
+        .lock()
+        .map_err(|e| format!("无法获取日志管理器锁: {}", e))?;
+
+    manager_guard
+        .update_config(config.clone())
+        .map_err(|e| format!("更新日志配置失败: {}", e))?;
+
+    tracing::info!("日志配置已更新 - 级别: {}, 控制台: {}, 文件: {}",
+        config.level, config.console_enabled, config.file_enabled);
+
+    Ok(())
+}
+
+/// 获取日志统计信息
+#[tauri::command]
+async fn get_log_stats() -> Result<duckcoding::logging::config::LoggingStats, String> {
+    let manager = duckcoding::logging::logger::get_global_log_manager()
+        .ok_or_else(|| "日志管理器未初始化".to_string())?;
+
+    let stats = manager
+        .lock()
+        .map_err(|e| format!("无法获取日志管理器锁: {}", e))?
+        .get_stats();
+
+    Ok(stats)
+}
+
+/// 刷新日志缓冲区
+#[tauri::command]
+async fn flush_logs() -> Result<(), String> {
+    let manager = duckcoding::logging::logger::get_global_log_manager()
+        .ok_or_else(|| "日志管理器未初始化".to_string())?;
+
+    manager
+        .lock()
+        .map_err(|e| format!("无法获取日志管理器锁: {}", e))?
+        .flush();
+
+    tracing::debug!("日志已通过命令刷新");
+    Ok(())
+}
+
+/// 获取可用的日志级别列表
+#[tauri::command]
+async fn get_available_log_levels() -> Result<Vec<String>, String> {
+    Ok(vec![
+        "error".to_string(),
+        "warn".to_string(),
+        "info".to_string(),
+        "debug".to_string(),
+        "trace".to_string(),
+    ])
+}
+
+/// 测试日志输出
+#[tauri::command]
+async fn test_logging() -> Result<(), String> {
+    // 首先确保日志系统正确初始化
+    let manager = duckcoding::logging::logger::get_global_log_manager()
+        .ok_or_else(|| "日志管理器未初始化".to_string())?;
+
+    tracing::error!("✅ 这是一条测试错误日志");
+    tracing::warn!("⚠️ 这是一条测试警告日志");
+    tracing::info!("ℹ️ 这是一条测试信息日志");
+    tracing::debug!("🐛 这是一条测试调试日志");
+    tracing::trace!("🔍 这是一条测试跟踪日志");
+
+    // 使用结构化字段
+    tracing::info!(
+        user_id = 12345,
+        action = "test_logging",
+        status = "completed",
+        "🧪 测试日志功能完成"
+    );
+
+    // 强制刷新缓冲区
+    manager
+        .lock()
+        .map_err(|e| format!("无法获取日志管理器锁: {}", e))?
+        .flush();
+
+    Ok(())
+}
+
+/// 打开日志文件所在目录
+#[tauri::command]
+async fn open_log_directory() -> Result<(), String> {
+    use duckcoding::logging::config::LoggingConfig;
+    use std::process::Command;
+
+    let config = LoggingConfig::default();
+    let log_path = config.get_effective_log_path();
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer")
+            .arg(&log_path)
+            .spawn()
+            .map_err(|e| format!("无法打开文件管理器: {}", e))?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(&log_path)
+            .spawn()
+            .map_err(|e| format!("无法打开访达: {}", e))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("xdg-open")
+            .arg(&log_path)
+            .spawn()
+            .map_err(|e| format!("无法打开文件管理器: {}", e))?;
+    }
+
+    tracing::info!("已打开日志目录: {:?}", log_path);
+    Ok(())
+}
+
+/// 清理旧日志文件
+#[tauri::command]
+async fn cleanup_old_logs(days_to_keep: u32) -> Result<usize, String> {
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let config = duckcoding::logging::config::LoggingConfig::default();
+    let log_path = config.get_effective_log_path();
+
+    if !log_path.exists() {
+        return Ok(0);
+    }
+
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    let cutoff_time = now - (days_to_keep as u64 * 24 * 60 * 60);
+    let mut deleted_count = 0;
+
+    let entries = fs::read_dir(&log_path)
+        .map_err(|e| format!("无法读取日志目录: {}", e))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("无法读取目录条目: {}", e))?;
+        let path = entry.path();
+
+        if path.is_file() {
+            if let Ok(metadata) = fs::metadata(&path) {
+                if let Ok(modified) = metadata.modified() {
+                    if let Ok(modified_time) = modified.duration_since(UNIX_EPOCH) {
+                        if modified_time.as_secs() < cutoff_time {
+                            if let Err(e) = fs::remove_file(&path) {
+                                tracing::warn!("无法删除旧日志文件 {:?}: {}", path, e);
+                            } else {
+                                deleted_count += 1;
+                                tracing::info!("已删除旧日志文件: {:?}", path);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    tracing::info!("日志清理完成，删除了 {} 个文件", deleted_count);
+    Ok(deleted_count)
+}
+
+/// 获取最近的日志条目
+#[tauri::command]
+async fn get_recent_logs(lines: usize) -> Result<Vec<String>, String> {
+    use std::fs::File;
+    use std::io::{BufRead, BufReader};
+
+    let config = duckcoding::logging::config::LoggingConfig::default();
+    let log_file = config.get_effective_log_path().join("duckcoding.log");
+
+    if !log_file.exists() {
+        return Ok(vec!["日志文件不存在".to_string()]);
+    }
+
+    let file = File::open(&log_file)
+        .map_err(|e| format!("无法打开日志文件: {}", e))?;
+
+    let reader = BufReader::new(file);
+
+    // 读取所有行到内存中
+    let all_lines: Vec<String> = reader
+        .lines()
+        .filter_map(|line| line.ok())
+        .collect();
+
+    // 从末尾取指定行数
+    let recent_logs: Vec<String> = all_lines
+        .into_iter()
+        .rev()
+        .take(lines)
+        .collect();
+
+    // 反转回正确的时间顺序
+    let mut log_lines = recent_logs;
+    log_lines.reverse();
+
+    Ok(log_lines)
 }

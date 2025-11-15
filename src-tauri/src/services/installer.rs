@@ -41,20 +41,56 @@ impl InstallerService {
 
     /// 获取已安装版本
     pub async fn get_installed_version(&self, tool: &Tool) -> Option<String> {
+        tracing::debug!("检查工具 {} 版本，命令: {}", tool.id, tool.check_command);
+
         let result = self.executor.execute_async(&tool.check_command).await;
 
         if result.success {
-            Self::extract_version(&result.stdout)
+            tracing::debug!("命令执行成功，stdout: {}", result.stdout.trim());
+            if result.stderr.trim().is_empty() {
+                tracing::debug!("stderr: (空)");
+            } else {
+                tracing::debug!("stderr: {}", result.stderr.trim());
+            }
+
+            let version = Self::extract_version(&result.stdout);
+            tracing::debug!("工具 {} 版本检测结果: {:?}", tool.id, version);
+            version
         } else {
+            tracing::debug!("命令执行失败，stderr: {}", result.stderr.trim());
             None
         }
     }
 
     /// 从输出中提取版本号
     fn extract_version(output: &str) -> Option<String> {
-        // 匹配版本号格式: v1.2.3 或 1.2.3
+        // 添加调试日志
+        tracing::debug!("尝试从输出中提取版本号: {}", output.trim());
+
+        // 匹配版本号格式: v1.2.3 或 1.2.3，后面可能有其他内容
         let re = regex::Regex::new(r"v?(\d+\.\d+\.\d+(?:-[\w.]+)?)").ok()?;
-        re.captures(output)?.get(1).map(|m| m.as_str().to_string())
+
+        // 先尝试匹配标准格式
+        if let Some(captures) = re.captures(output) {
+            if let Some(version) = captures.get(1) {
+                let version_str = version.as_str().to_string();
+                tracing::debug!("✅ 使用标准正则匹配到版本: {}", version_str);
+                return Some(version_str);
+            }
+        }
+
+        // 如果标准格式失败，尝试更宽松的匹配
+        let loose_re = regex::Regex::new(r"(\d+\.\d+\.\d+)").ok()?;
+        if let Some(captures) = loose_re.captures(output) {
+            if let Some(version) = captures.get(1) {
+                let version_str = version.as_str().to_string();
+                tracing::debug!("✅ 使用宽松正则匹配到版本: {}", version_str);
+                return Some(version_str);
+            }
+        }
+
+        tracing::debug!("❌ 无法从输出中提取版本号: {}", output.trim());
+        None
     }
 
     /// 检测工具的安装方法

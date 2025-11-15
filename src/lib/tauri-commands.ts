@@ -322,3 +322,72 @@ export async function updateTransparentProxyConfig(
     newBaseUrl,
   });
 }
+
+// 日志系统相关接口和函数
+export type LogLevel = 'error' | 'warn' | 'info' | 'debug' | 'trace';
+
+export interface LoggingConfig {
+  level: LogLevel;
+  console_enabled: boolean;
+  file_enabled: boolean;
+  file_path?: string | null;
+  json_format: boolean;
+  max_file_size?: number | null;
+  max_files?: number | null;
+}
+
+export interface LoggingStats {
+  total_logs: number;
+  error_count: number;
+  warn_count: number;
+  info_count: number;
+  debug_count: number;
+  trace_count: number;
+  log_file_size?: number | null;
+  uptime_seconds: number;
+}
+
+// 日志相关 Tauri 命令
+export async function setLogLevel(level: LogLevel): Promise<void> {
+  return await invoke<void>('set_log_level', { level });
+}
+
+export async function getLogLevel(): Promise<LogLevel> {
+  return await invoke<LogLevel>('get_log_level');
+}
+
+export async function getLogConfig(): Promise<LoggingConfig> {
+  return await invoke<LoggingConfig>('get_log_config');
+}
+
+export async function updateLogConfig(config: LoggingConfig): Promise<void> {
+  return await invoke<void>('update_log_config', { config });
+}
+
+export async function getLogStats(): Promise<LoggingStats> {
+  return await invoke<LoggingStats>('get_log_stats');
+}
+
+export async function flushLogs(): Promise<void> {
+  return await invoke<void>('flush_logs');
+}
+
+export async function getAvailableLogLevels(): Promise<LogLevel[]> {
+  return await invoke<LogLevel[]>('get_available_log_levels');
+}
+
+export async function testLogging(): Promise<void> {
+  return await invoke<void>('test_logging');
+}
+
+export async function openLogDirectory(): Promise<void> {
+  return await invoke<void>('open_log_directory');
+}
+
+export async function cleanupOldLogs(daysToKeep: number): Promise<number> {
+  return await invoke<number>('cleanup_old_logs', { daysToKeep });
+}
+
+export async function getRecentLogs(lines: number): Promise<string[]> {
+  return await invoke<string[]>('get_recent_logs', { lines });
+}

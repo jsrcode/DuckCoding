@@ -1,9 +1,13 @@
 // lib.rs - 暴露服务层给 CLI 和 GUI 使用
 
 pub mod http_client;
+pub mod logging;
 pub mod models;
 pub mod services;
 pub mod utils;
+
+// 重新导出日志命令，以便在 main.rs 中使用
+pub use logging::commands::*;
 
 pub use models::*;
 // Explicitly re-export only selected service types to avoid ambiguous glob re-exports

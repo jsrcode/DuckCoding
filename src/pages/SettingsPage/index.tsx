@@ -6,9 +6,11 @@ import { PageContainer } from '@/components/layout/PageContainer';
 import { useToast } from '@/hooks/use-toast';
 import { useSettingsForm } from './hooks/useSettingsForm';
 import { useTransparentProxy } from './hooks/useTransparentProxy';
+import { useLoggingSettings } from './hooks/useLoggingSettings';
 import { BasicSettingsTab } from './components/BasicSettingsTab';
 import { ProxySettingsTab } from './components/ProxySettingsTab';
 import { ExperimentalSettingsTab } from './components/ExperimentalSettingsTab';
+import { LoggingSettingsTab } from './components/LoggingSettingsTab';
 import type { GlobalConfig } from '@/lib/tauri-commands';
 
 interface SettingsPageProps {
@@ -63,6 +65,13 @@ export function SettingsPage({ globalConfig, onConfigChange }: SettingsPageProps
     handleStartProxy,
     handleStopProxy,
   } = useTransparentProxy();
+
+  // 日志设置 Hook
+  const loggingSettings = useLoggingSettings({
+    onUpdate: () => {
+      // 日志配置更新后可以做一些额外的处理
+    },
+  });
 
   // 初始加载透明代理状态
   useEffect(() => {
@@ -154,6 +163,7 @@ export function SettingsPage({ globalConfig, onConfigChange }: SettingsPageProps
         <TabsList>
           <TabsTrigger value="basic">基本设置</TabsTrigger>
           <TabsTrigger value="proxy">代理设置</TabsTrigger>
+          <TabsTrigger value="logging">日志设置</TabsTrigger>
           <TabsTrigger value="experimental">实验性功能</TabsTrigger>
         </TabsList>
 
@@ -187,6 +197,11 @@ export function SettingsPage({ globalConfig, onConfigChange }: SettingsPageProps
             testingProxy={testingProxy}
             onTestProxy={handleTestProxy}
           />
+        </TabsContent>
+
+        {/* 日志设置 */}
+        <TabsContent value="logging" className="space-y-6">
+          <LoggingSettingsTab logging={loggingSettings} />
         </TabsContent>
 
         {/* 实验性功能 */}

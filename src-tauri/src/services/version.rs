@@ -200,7 +200,7 @@ impl VersionService {
     /// 批量从镜像站获取所有工具版本（优化：一次请求）
     async fn get_all_from_mirror(&self) -> Result<MirrorApiResponse> {
         #[cfg(debug_assertions)]
-        println!("🔍 正在请求镜像站 API: {}", &self.mirror_api_url);
+        tracing::info!("🔍 正在请求镜像站 API: {}", &self.mirror_api_url);
 
         // 统一通过带代理的 Client 进行请求
         let client = crate::http_client::build_client().map_err(|e| anyhow::anyhow!(e))?;
