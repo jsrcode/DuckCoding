@@ -165,10 +165,23 @@ function App() {
   // 智能预加载：只要有凭证就立即预加载统计数据
   useEffect(() => {
     // 条件：配置已加载 + 有凭证 + 还没有统计数据 + 不在加载中 + 没有失败过
-    if (globalConfig?.user_id && globalConfig?.system_token && !usageStats && !statsLoading && !statsLoadFailed) {
+    if (
+      globalConfig?.user_id &&
+      globalConfig?.system_token &&
+      !usageStats &&
+      !statsLoading &&
+      !statsLoadFailed
+    ) {
       loadStatistics();
     }
-  }, [globalConfig?.user_id, globalConfig?.system_token, usageStats, statsLoading, statsLoadFailed, loadStatistics]);
+  }, [
+    globalConfig?.user_id,
+    globalConfig?.system_token,
+    usageStats,
+    statsLoading,
+    statsLoadFailed,
+    loadStatistics,
+  ]);
 
   // 使用关闭动作 Hook
   const {
