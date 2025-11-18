@@ -26,6 +26,9 @@
     "check": "npm run lint && npm run fmt",
     "check:fix": "npm run lint:fix && npm run fmt:fix"
   },
+  "overrides": {
+    "glob": "12.0.0"
+  },
   "keywords": [
     "duckcoding",
     "claude-code",
