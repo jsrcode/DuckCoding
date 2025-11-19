@@ -2,35 +2,11 @@ use crate::commands::types::{InstallResult, NodeEnvironment, ToolStatus, UpdateR
 use ::duckcoding::models::{InstallMethod, Tool};
 use ::duckcoding::services::{InstallerService, VersionService};
 use ::duckcoding::utils::config::apply_proxy_if_configured;
+use ::duckcoding::utils::platform::PlatformInfo;
 use std::process::Command;
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
-
-// 辅助函数：获取扩展的PATH（从main.rs复用）
-fn get_extended_path() -> String {
-    let current_path = std::env::var("PATH").unwrap_or_default();
-
-    // 添加常见的npm全局安装路径
-    #[cfg(target_os = "windows")]
-    {
-        let appdata = std::env::var("APPDATA").unwrap_or_default();
-        let userprofile = std::env::var("USERPROFILE").unwrap_or_default();
-        format!(
-            "{};{}\\npm;{}\\AppData\\Roaming\\npm",
-            current_path, appdata, userprofile
-        )
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        let home = std::env::var("HOME").unwrap_or_default();
-        format!(
-            "{}:/usr/local/bin:/opt/homebrew/bin:{}/.npm-global/bin",
-            current_path, home
-        )
-    }
-}
 
 /// 检查所有工具的安装状态
 #[tauri::command]
@@ -64,11 +40,12 @@ pub async fn check_installations() -> Result<Vec<ToolStatus>, String> {
 /// 检测 Node.js 和 npm 环境
 #[tauri::command]
 pub async fn check_node_environment() -> Result<NodeEnvironment, String> {
+    let enhanced_path = PlatformInfo::current().build_enhanced_path();
     let run_command = |cmd: &str| -> Result<std::process::Output, std::io::Error> {
         #[cfg(target_os = "windows")]
         {
             Command::new("cmd")
-                .env("PATH", get_extended_path())
+                .env("PATH", &enhanced_path)
                 .arg("/C")
                 .arg(cmd)
                 .creation_flags(0x08000000) // CREATE_NO_WINDOW - 隐藏终端窗口
@@ -77,7 +54,7 @@ pub async fn check_node_environment() -> Result<NodeEnvironment, String> {
         #[cfg(not(target_os = "windows"))]
         {
             Command::new("sh")
-                .env("PATH", get_extended_path())
+                .env("PATH", &enhanced_path)
                 .arg("-c")
                 .arg(cmd)
                 .output()
