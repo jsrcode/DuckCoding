@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { BarChart3, Settings as SettingsIcon, RefreshCw, Loader2 } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { QuotaCard } from '@/components/QuotaCard';
 import { TodayStatsCard } from '@/components/TodayStatsCard';
@@ -12,6 +13,8 @@ interface StatisticsPageProps {
   usageStats: UsageStatsResult | null;
   userQuota: UserQuotaResult | null;
   statsLoading: boolean;
+  statsLoadFailed: boolean;
+  statsError?: string | null;
   onLoadStatistics: () => void;
 }
 
@@ -20,6 +23,8 @@ export function StatisticsPage({
   usageStats,
   userQuota,
   statsLoading,
+  statsLoadFailed,
+  statsError,
   onLoadStatistics,
 }: StatisticsPageProps) {
   const hasCredentials = globalConfig?.user_id && globalConfig?.system_token;
@@ -56,6 +61,34 @@ export function StatisticsPage({
         </Card>
       ) : (
         <div className="space-y-6">
+          {statsLoadFailed && (
+            <Alert variant="destructive" className="flex items-start gap-3">
+              <BarChart3 className="h-4 w-4 mt-0.5" />
+              <div className="flex-1 space-y-1">
+                <AlertTitle>统计数据获取失败</AlertTitle>
+                <AlertDescription>{statsError || '请检查网络或凭证设置后重试'}</AlertDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onLoadStatistics}
+                disabled={statsLoading}
+              >
+                {statsLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    正在重试...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    重新加载
+                  </>
+                )}
+              </Button>
+            </Alert>
+          )}
+
           <div className="flex items-center justify-end">
             <Button
               variant="outline"

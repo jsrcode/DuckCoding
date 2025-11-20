@@ -44,6 +44,7 @@ function App() {
   const [userQuota, setUserQuota] = useState<UserQuotaResult | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsLoadFailed, setStatsLoadFailed] = useState(false); // 新增：记录加载失败状态
+  const [statsError, setStatsError] = useState<string | null>(null);
 
   // 更新检查状态
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
@@ -84,6 +85,7 @@ function App() {
     try {
       setStatsLoading(true);
       setStatsLoadFailed(false);
+      setStatsError(null);
       const [quota, stats] = await Promise.all([getUserQuota(), getUsageStats()]);
       setUserQuota(quota);
       setUsageStats(stats);
@@ -91,10 +93,12 @@ function App() {
     } catch (error) {
       console.error('Failed to load statistics:', error);
       setStatsLoadFailed(true);
+      const message = error instanceof Error ? error.message : '请检查网络连接后重试';
+      setStatsError(message);
 
       toast({
         title: '加载统计数据失败',
-        description: error instanceof Error ? error.message : '请检查网络连接后重试',
+        description: message,
         variant: 'destructive',
         duration: 5000,
       });
@@ -161,6 +165,12 @@ function App() {
 
     return () => clearTimeout(timer);
   }, [checkAppUpdates]);
+
+  // 当凭证变更时，重置统计状态以便重新加载
+  useEffect(() => {
+    setStatsLoadFailed(false);
+    setStatsError(null);
+  }, [globalConfig?.user_id, globalConfig?.system_token]);
 
   // 智能预加载：只要有凭证就立即预加载统计数据
   useEffect(() => {
@@ -236,6 +246,8 @@ function App() {
             usageStats={usageStats}
             userQuota={userQuota}
             statsLoading={statsLoading}
+            statsLoadFailed={statsLoadFailed}
+            statsError={statsError}
             onLoadStatistics={loadStatistics}
           />
         )}
