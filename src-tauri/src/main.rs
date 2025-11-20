@@ -30,11 +30,18 @@ struct SingleInstancePayload {
 
 fn create_tray_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let show_item = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>)?;
+    let check_update_item = MenuItem::with_id(app, "check_update", "检查更新", true, None::<&str>)?;
     let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
 
     let menu = Menu::with_items(
         app,
-        &[&show_item, &PredefinedMenuItem::separator(app)?, &quit_item],
+        &[
+            &show_item,
+            &PredefinedMenuItem::separator(app)?,
+            &check_update_item,
+            &PredefinedMenuItem::separator(app)?,
+            &quit_item,
+        ],
     )?;
 
     Ok(menu)
@@ -191,6 +198,13 @@ fn main() {
                             println!("Show window requested from tray menu");
                             focus_main_window(app);
                         }
+                        "check_update" => {
+                            println!("Check update requested from tray menu");
+                            // 发送检查更新事件到前端
+                            if let Err(e) = app.emit("request-check-update", ()) {
+                                eprintln!("Failed to emit request-check-update event: {:?}", e);
+                            }
+                        }
                         "quit" => {
                             println!("Quit requested from tray menu");
                             app.exit(0);
@@ -234,6 +248,34 @@ fn main() {
                     }
                 });
             }
+
+            // 启动后延迟检查更新
+            let app_handle_for_update = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                // 延迟1秒，避免影响启动速度
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                println!("Auto checking for updates on startup...");
+
+                // 获取 UpdateServiceState 并检查更新
+                let state = app_handle_for_update.state::<UpdateServiceState>();
+                match state.service.check_for_updates().await {
+                    Ok(update_info) => {
+                        if update_info.has_update {
+                            println!("Update available: {}", update_info.latest_version);
+                            if let Err(e) =
+                                app_handle_for_update.emit("update-available", &update_info)
+                            {
+                                eprintln!("Failed to emit update-available event: {:?}", e);
+                            }
+                        } else {
+                            println!("No update available, current version is latest");
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to check for updates on startup: {:?}", e);
+                    }
+                }
+            });
 
             Ok(())
         })
@@ -301,6 +343,7 @@ fn main() {
             restart_app_for_update,
             get_platform_info,
             get_recommended_package_format,
+            trigger_check_update,
         ]);
 
     // 使用自定义事件循环处理 macOS Reopen 事件

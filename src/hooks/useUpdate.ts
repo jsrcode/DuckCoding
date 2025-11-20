@@ -261,6 +261,10 @@ export function useUpdate({ externalUpdateInfo, onExternalUpdateCheck }: UseUpda
       } else {
         setUpdateStatus('Idle');
       }
+    } else if (externalUpdateInfo === null) {
+      // 外部明确清空了更新信息，重置内部状态
+      setUpdateInfo(null);
+      setUpdateStatus('Idle');
     }
   }, [externalUpdateInfo]);
 

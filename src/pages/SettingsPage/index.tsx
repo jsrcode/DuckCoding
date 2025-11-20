@@ -9,7 +9,7 @@ import { useTransparentProxy } from './hooks/useTransparentProxy';
 import { BasicSettingsTab } from './components/BasicSettingsTab';
 import { ProxySettingsTab } from './components/ProxySettingsTab';
 import { ExperimentalSettingsTab } from './components/ExperimentalSettingsTab';
-import { UpdateTab } from './components/UpdateTab';
+import { AboutTab } from './components/AboutTab';
 import type { GlobalConfig, UpdateInfo } from '@/lib/tauri-commands';
 
 interface SettingsPageProps {
@@ -23,7 +23,7 @@ interface SettingsPageProps {
 export function SettingsPage({
   globalConfig,
   onConfigChange,
-  updateInfo,
+  updateInfo: _updateInfo,
   onUpdateCheck,
 }: SettingsPageProps) {
   const { toast } = useToast();
@@ -82,16 +82,19 @@ export function SettingsPage({
     });
   }, [loadTransparentProxyStatus]);
 
-  // 监听来自App组件的导航到更新tab的事件
+  // 监听来自App组件的导航到关于tab的事件
   useEffect(() => {
-    const handleNavigateToUpdateTab = () => {
-      setActiveTab('update');
+    const handleNavigateToAboutTab = () => {
+      setActiveTab('about');
     };
 
-    window.addEventListener('navigate-to-update-tab', handleNavigateToUpdateTab);
+    window.addEventListener('navigate-to-about-tab', handleNavigateToAboutTab);
+    // 保持向下兼容，同时也监听 update tab
+    window.addEventListener('navigate-to-update-tab', handleNavigateToAboutTab);
 
     return () => {
-      window.removeEventListener('navigate-to-update-tab', handleNavigateToUpdateTab);
+      window.removeEventListener('navigate-to-about-tab', handleNavigateToAboutTab);
+      window.removeEventListener('navigate-to-update-tab', handleNavigateToAboutTab);
     };
   }, []);
 
@@ -179,7 +182,7 @@ export function SettingsPage({
           <TabsTrigger value="basic">基本设置</TabsTrigger>
           <TabsTrigger value="proxy">代理设置</TabsTrigger>
           <TabsTrigger value="experimental">实验性功能</TabsTrigger>
-          <TabsTrigger value="update">更新管理</TabsTrigger>
+          <TabsTrigger value="about">关于</TabsTrigger>
         </TabsList>
 
         {/* 基本设置 */}
@@ -236,14 +239,14 @@ export function SettingsPage({
           />
         </TabsContent>
 
-        {/* 更新管理 */}
-        <TabsContent value="update" className="space-y-6">
-          <UpdateTab updateInfo={updateInfo} onUpdateCheck={onUpdateCheck} />
+        {/* 关于 */}
+        <TabsContent value="about" className="space-y-6">
+          <AboutTab onCheckUpdate={() => onUpdateCheck?.()} />
         </TabsContent>
       </Tabs>
 
-      {/* 保存按钮 - 仅在非更新管理标签页时显示 */}
-      {activeTab !== 'update' && (
+      {/* 保存按钮 - 仅在非关于标签页时显示 */}
+      {activeTab !== 'about' && (
         <div className="flex justify-end mt-6">
           <Button
             onClick={handleSaveSettings}

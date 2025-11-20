@@ -121,3 +121,27 @@ pub async fn get_recommended_package_format(
 ) -> Result<PackageFormatInfo, String> {
     Ok(state.service.get_recommended_package_format())
 }
+
+/// 主动触发检查更新（供托盘菜单和启动时调用）
+#[tauri::command]
+pub async fn trigger_check_update(
+    app: AppHandle,
+    state: State<'_, UpdateServiceState>,
+) -> Result<(), String> {
+    let update_info = state
+        .service
+        .check_for_updates()
+        .await
+        .map_err(|e| format!("Failed to check for updates: {}", e))?;
+
+    // 发送事件到前端
+    if update_info.has_update {
+        app.emit("update-available", &update_info)
+            .map_err(|e| format!("Failed to emit update-available event: {}", e))?;
+    } else {
+        app.emit("update-not-found", &update_info)
+            .map_err(|e| format!("Failed to emit update-not-found event: {}", e))?;
+    }
+
+    Ok(())
+}

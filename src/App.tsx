@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
+import { listen } from '@tauri-apps/api/event';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { CloseActionDialog } from '@/components/dialogs/CloseActionDialog';
+import { UpdateDialog } from '@/components/dialogs/UpdateDialog';
 import { StatisticsPage } from '@/pages/StatisticsPage';
 import { InstallationPage } from '@/pages/InstallationPage';
 import { DashboardPage } from '@/pages/DashboardPage';
@@ -49,6 +51,7 @@ function App() {
   // 更新检查状态
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [updateCheckDone, setUpdateCheckDone] = useState(false);
+  const [isUpdateDialogOpen, setIsUpdateDialogOpen] = useState(false);
 
   // 加载工具状态（全局缓存）
   const loadTools = useCallback(async () => {
@@ -108,48 +111,31 @@ function App() {
   }, [globalConfig?.user_id, globalConfig?.system_token, toast]);
 
   // 检查应用更新
-  const checkAppUpdates = useCallback(async () => {
-    // 避免重复检查
-    if (updateCheckDone) {
-      return;
-    }
-
-    try {
-      console.log('Checking for app updates...');
-      const update = await checkForAppUpdates();
-      setUpdateInfo(update);
-
-      // 如果有可用更新，显示通知
-      if (update.has_update) {
-        toast({
-          title: '发现新版本',
-          description: `DuckCoding ${update.latest_version} 现已可用，当前版本：${update.current_version}`,
-          action: (
-            <button
-              onClick={() => {
-                setActiveTab('settings');
-                // 延迟一点时间确保页面切换后再设置子tab
-                setTimeout(() => {
-                  // 通过事件或者状态管理来设置更新tab
-                  const event = new CustomEvent('navigate-to-update-tab');
-                  window.dispatchEvent(event);
-                }, 100);
-              }}
-              className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors whitespace-nowrap"
-            >
-              立即更新
-            </button>
-          ),
-          duration: 8000, // 显示8秒，给用户足够时间点击
-        });
+  const checkAppUpdates = useCallback(
+    async (force = false) => {
+      // 避免重复检查，除非强制检查
+      if (updateCheckDone && !force) {
+        return;
       }
-    } catch (error) {
-      console.error('Failed to check for updates:', error);
-      // 静默失败，不显示错误通知给用户
-    } finally {
-      setUpdateCheckDone(true);
-    }
-  }, [updateCheckDone, toast]);
+
+      try {
+        console.log('Checking for app updates...');
+        const update = await checkForAppUpdates();
+        setUpdateInfo(update);
+
+        // 如果有可用更新，直接打开更新弹窗
+        if (update.has_update) {
+          setIsUpdateDialogOpen(true);
+        }
+      } catch (error) {
+        console.error('Failed to check for updates:', error);
+        // 静默失败，不显示错误通知给用户
+      } finally {
+        setUpdateCheckDone(true);
+      }
+    },
+    [updateCheckDone],
+  );
 
   // 初始化加载工具和全局配置
   useEffect(() => {
@@ -157,11 +143,11 @@ function App() {
     loadGlobalConfig();
   }, [loadTools, loadGlobalConfig]);
 
-  // 应用启动时检查更新（延迟3秒，避免影响启动速度）
+  // 应用启动时检查更新（延迟1秒，避免影响启动速度）
   useEffect(() => {
     const timer = setTimeout(() => {
       checkAppUpdates();
-    }, 3000); // 3秒后检查更新
+    }, 1000); // 1秒后检查更新
 
     return () => clearTimeout(timer);
   }, [checkAppUpdates]);
@@ -171,6 +157,39 @@ function App() {
     setStatsLoadFailed(false);
     setStatsError(null);
   }, [globalConfig?.user_id, globalConfig?.system_token]);
+
+  // 监听后端推送的更新事件
+  useEffect(() => {
+    // 监听后端主动推送的更新可用事件
+    const unlistenUpdateAvailable = listen<UpdateInfo>('update-available', (event) => {
+      const updateInfo = event.payload;
+      setUpdateInfo(updateInfo);
+
+      // 直接打开更新弹窗
+      setIsUpdateDialogOpen(true);
+    });
+
+    // 监听托盘菜单触发的检查更新请求
+    const unlistenRequestCheck = listen('request-check-update', () => {
+      // 清空旧的更新信息，打开弹窗，触发重新检查
+      setUpdateInfo(null);
+      setIsUpdateDialogOpen(true);
+    });
+
+    // 监听未发现更新事件（用于托盘触发后的反馈）
+    const unlistenNotFound = listen('update-not-found', () => {
+      toast({
+        title: '已是最新版本',
+        description: '当前无可用更新',
+      });
+    });
+
+    return () => {
+      unlistenUpdateAvailable.then((fn) => fn());
+      unlistenRequestCheck.then((fn) => fn());
+      unlistenNotFound.then((fn) => fn());
+    };
+  }, [toast]);
 
   // 智能预加载：只要有凭证就立即预加载统计数据
   useEffect(() => {
@@ -257,10 +276,26 @@ function App() {
             configLoading={configLoading}
             onConfigChange={loadGlobalConfig}
             updateInfo={updateInfo}
-            onUpdateCheck={checkAppUpdates}
+            onUpdateCheck={() => {
+              // 清空旧的更新信息，打开弹窗，触发重新检查
+              setUpdateInfo(null);
+              setIsUpdateDialogOpen(true);
+            }}
           />
         )}
       </main>
+
+      {/* 更新对话框 */}
+      <UpdateDialog
+        open={isUpdateDialogOpen}
+        onOpenChange={setIsUpdateDialogOpen}
+        updateInfo={updateInfo}
+        onCheckForUpdate={() => {
+          // 清空旧信息，触发重新检查
+          setUpdateInfo(null);
+          checkAppUpdates(true);
+        }}
+      />
 
       {/* 关闭动作选择对话框 */}
       <CloseActionDialog
