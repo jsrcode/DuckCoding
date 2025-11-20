@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   checkAllUpdates,
   type ToolStatus,
@@ -142,6 +142,15 @@ export function useDashboard(initialTools: ToolStatus[]) {
       });
     });
   }, []); // 空依赖数组，因为使用了函数式更新
+
+  // 组件卸载时清理定时器，避免潜在的状态更新警告
+  useEffect(() => {
+    return () => {
+      if (updateMessageTimeoutRef.current) {
+        clearTimeout(updateMessageTimeoutRef.current);
+      }
+    };
+  }, []);
 
   return {
     tools,

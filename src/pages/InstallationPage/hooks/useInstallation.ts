@@ -9,10 +9,13 @@ import type { NodeEnvironment } from '@/components/dialogs/MirrorStaleDialog';
 export function useInstallation(_tools: ToolStatus[]) {
   const [installing, setInstalling] = useState<string | null>(null);
   const [nodeEnv, setNodeEnv] = useState<NodeEnvironment | null>(null);
-  const [installMethods, setInstallMethods] = useState<Record<string, string>>({
-    'claude-code': 'official',
-    codex: navigator.userAgent.includes('Mac') ? 'brew' : 'npm',
-    'gemini-cli': 'npm',
+  const [installMethods, setInstallMethods] = useState<Record<string, string>>(() => {
+    const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac');
+    return {
+      'claude-code': 'official',
+      codex: isMac ? 'brew' : 'npm',
+      'gemini-cli': 'npm',
+    };
   });
   const [mirrorStaleDialog, setMirrorStaleDialog] = useState({
     open: false,
@@ -40,7 +43,7 @@ export function useInstallation(_tools: ToolStatus[]) {
   // 获取可用的安装方法
   const getAvailableInstallMethods = useCallback(
     (toolId: string): Array<{ value: string; label: string; disabled?: boolean }> => {
-      const isMac = navigator.userAgent.includes('Mac');
+      const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac');
 
       if (toolId === 'claude-code') {
         return [
