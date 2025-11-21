@@ -826,6 +826,7 @@ name = "duckcoding"
 version = "1.2.13"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bytes",
  "chrono",
  "cocoa",
