@@ -1,6 +1,6 @@
 [package]
 name = "duckcoding"
-version = "1.2.13"
+version = "1.2.14"
 description = "DuckCoding AI 工具一键配置"
 authors = ["DuckCoding"]
 edition = "2021"
