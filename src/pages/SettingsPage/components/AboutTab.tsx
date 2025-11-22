@@ -82,7 +82,7 @@ export function AboutTab({ onCheckUpdate }: AboutTabProps) {
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground space-y-2">
           <p>DuckCoding 是一个开源项目，遵循 MIT 许可证。</p>
-          <p>Copyright © 2024 DuckCoding Contributors.</p>
+          <p>Copyright © 2025 DuckCoding Contributors.</p>
         </CardContent>
       </Card>
     </div>
