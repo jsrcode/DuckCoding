@@ -281,7 +281,7 @@ export function ProxySettingsDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             取消
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button onClick={handleSave} disabled={saving || isRunning}>
             {saving ? '保存中...' : '保存配置'}
           </Button>
         </DialogFooter>
