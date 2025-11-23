@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -26,6 +27,7 @@ import { useSessionData } from '../../hooks/useSessionData';
 import { SessionConfigDialog } from '../SessionConfigDialog';
 import { SessionNoteDialog } from '../SessionNoteDialog';
 import { getGlobalConfig, type SessionRecord } from '@/lib/tauri-commands';
+import { isActiveSession } from '@/utils/sessionHelpers';
 
 const DISMISS_KEY = 'duckcoding_session_config_hint_dismissed';
 
@@ -317,8 +319,11 @@ export function ClaudeContent() {
         <table className="w-full">
           <thead className="bg-muted/50">
             <tr>
-              <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground w-[200px]">
+              <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground w-[220px]">
                 会话标识符
+              </th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground w-[100px]">
+                状态
               </th>
               <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground w-[180px]">
                 会话启动时间
@@ -338,10 +343,22 @@ export function ClaudeContent() {
             {sessions.map((session) => (
               <tr key={session.session_id} className="border-t hover:bg-muted/30 transition-colors">
                 <td className="px-4 py-3 text-sm">
-                  {session.note ? (
-                    <span className="font-medium">{session.note}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">{session.note || '未命名'}</span>
+                    <Badge variant="outline" className="font-mono text-xs">
+                      {session.display_id.slice(0, 8)}
+                    </Badge>
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-sm">
+                  {isActiveSession(session.last_seen_at) ? (
+                    <Badge variant="default" className="bg-green-500 hover:bg-green-600">
+                      活跃
+                    </Badge>
                   ) : (
-                    <span className="font-mono text-muted-foreground">{session.display_id}</span>
+                    <Badge variant="secondary" className="text-muted-foreground">
+                      空闲
+                    </Badge>
                   )}
                 </td>
                 <td className="px-4 py-3 text-sm text-muted-foreground">
