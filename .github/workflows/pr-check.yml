@@ -1,0 +1,133 @@
+name: PR Check
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  check:
+    name: Check (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ubuntu-22.04
+            os: ubuntu-22.04
+          - name: windows-latest
+            os: windows-latest
+          - name: macos-arm64
+            os: macos-14
+          - name: macos-x64
+            os: macos-13
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libjavascriptcoregtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Install WebView2 runtime (Windows)
+        if: startsWith(matrix.os, 'windows')
+        run: choco install microsoft-edge-webview2-runtime --no-progress --yes
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: 'src-tauri -> target'
+          cache-on-failure: true
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: npm run check
+        id: check
+        run: npm run check
+        continue-on-error: true
+
+      - name: npm run check:fix (diagnostic)
+        id: check_fix
+        if: steps.check.outcome == 'failure'
+        run: npm run check:fix
+        continue-on-error: true
+
+      - name: npm run check (post-fix)
+        id: recheck
+        if: steps.check.outcome == 'failure'
+        run: npm run check
+        continue-on-error: true
+
+      - name: 'Comment: auto-fix succeeded, please commit locally'
+        if: github.event_name == 'pull_request' && steps.check.outcome == 'failure' && steps.recheck.outcome == 'success'
+        uses: actions/github-script@v7
+        env:
+          MATRIX_NAME: ${{ matrix.name }}
+        with:
+          script: |
+            const body = [
+              `平台 ${process.env.MATRIX_NAME}：首次 npm run check 失败，但执行 npm run check:fix 后复检已通过。`,
+              '请在本地运行：',
+              '1) npm run check:fix',
+              '2) npm run check',
+              '3) 提交修复 commit',
+              '以保持流程一致。'
+            ].join('\n');
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+      - name: 'Comment: fix still failing, please resolve locally'
+        if: github.event_name == 'pull_request' && steps.check.outcome == 'failure' && steps.recheck.outcome != 'success'
+        uses: actions/github-script@v7
+        env:
+          MATRIX_NAME: ${{ matrix.name }}
+        with:
+          script: |
+            const body = [
+              `平台 ${process.env.MATRIX_NAME}：npm run check 失败，执行 npm run check:fix 后仍未通过。`,
+              '请在本地排查并确保 npm run check 全部通过后再提交。'
+            ].join('\n');
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+      - name: Fail if initial check failed
+        if: steps.check.outcome == 'failure'
+        run: exit 1
