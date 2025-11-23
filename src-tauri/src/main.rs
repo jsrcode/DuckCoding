@@ -222,7 +222,7 @@ fn main() {
                             println!("Check update requested from tray menu");
                             // 发送检查更新事件到前端
                             if let Err(e) = app.emit("request-check-update", ()) {
-                                eprintln!("Failed to emit request-check-update event: {:?}", e);
+                                eprintln!("Failed to emit request-check-update event: {e:?}");
                             }
                         }
                         "quit" => {
@@ -285,14 +285,14 @@ fn main() {
                             if let Err(e) =
                                 app_handle_for_update.emit("update-available", &update_info)
                             {
-                                eprintln!("Failed to emit update-available event: {:?}", e);
+                                eprintln!("Failed to emit update-available event: {e:?}");
                             }
                         } else {
                             println!("No update available, current version is latest");
                         }
                     }
                     Err(e) => {
-                        eprintln!("Failed to check for updates on startup: {:?}", e);
+                        eprintln!("Failed to check for updates on startup: {e:?}");
                     }
                 }
             });
