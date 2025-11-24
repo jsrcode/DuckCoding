@@ -480,7 +480,6 @@ impl ConfigService {
                 // 只备份当前 provider 的完整配置
                 if let Some(providers) = doc.get("model_providers").and_then(|p| p.as_table()) {
                     if let Some(current_provider) = providers.get(current_provider_name) {
-
                         tracing::debug!(
                             provider = %current_provider_name,
                             profile = %profile_name,

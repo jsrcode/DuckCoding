@@ -73,6 +73,7 @@ last-updated: 2025-11-23
   - 新命令：`start_tool_proxy`、`stop_tool_proxy`、`get_all_proxy_status`
   - 旧命令保持兼容，内部使用新架构实现
   - `ToolProxyConfig` 额外存储 `real_profile_name`、`auto_start`、工具级 `session_endpoint_config_enabled`，全局配置新增 `hide_transparent_proxy_tip` 控制设置页横幅显示
+  - `GlobalConfig.hide_session_config_hint` 持久化会话级端点提示的隐藏状态，`ProxyControlBar`/`ProxySettingsDialog`/`ClaudeContent` 通过 `open-proxy-settings` 与 `proxy-config-updated` 事件联动刷新视图
   - 应用启动时 `duckcoding::auto_start_proxies` 会读取配置，满足 `enabled && auto_start` 且存在 `local_api_key` 的代理会自动启动
   - `utils::config::migrate_session_config` 会将旧版 `GlobalConfig.session_endpoint_config_enabled` 自动迁移到各工具配置，确保升级过程不会丢开关
 - 全局配置读写统一走 `utils::config::{read_global_config, write_global_config, apply_proxy_if_configured}`，避免出现多份路径逻辑；任何命令要修改配置都应调用这些辅助函数。
