@@ -112,6 +112,7 @@ mod tests {
             proxy_configs: std::collections::HashMap::new(),
             session_endpoint_config_enabled: false,
             hide_transparent_proxy_tip: false,
+            hide_session_config_hint: false,
         };
 
         let url = build_proxy_url(&config).unwrap();
@@ -139,6 +140,7 @@ mod tests {
             proxy_configs: std::collections::HashMap::new(),
             session_endpoint_config_enabled: false,
             hide_transparent_proxy_tip: false,
+            hide_session_config_hint: false,
         };
 
         let url = build_proxy_url(&config).unwrap();

@@ -133,6 +133,8 @@ export function ProxySettingsDialog({
         session_endpoint_config_enabled: sessionEndpointEnabled,
         auto_start: autoStart,
       });
+      // 触发配置更新事件
+      window.dispatchEvent(new Event('proxy-config-updated'));
       toast({
         title: '配置已保存',
         description: '代理设置已更新',

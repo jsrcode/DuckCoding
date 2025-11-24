@@ -135,7 +135,8 @@ fn main() {
 
     let log_config = LogConfig::default();
     if let Err(e) = init_logger(log_config) {
-        eprintln!("⚠️ 日志系统初始化失败: {}", e);
+        // 日志系统初始化失败时使用 eprintln!（因为 tracing 还不可用）
+        eprintln!("WARNING: Failed to initialize logging system: {}", e);
         // 继续运行，但日志功能将不可用
     }
 

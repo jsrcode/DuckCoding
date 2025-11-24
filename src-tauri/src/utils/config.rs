@@ -58,7 +58,7 @@ fn migrate_proxy_config(config: &mut GlobalConfig) -> Result<(), String> {
 
         // 只有当新配置还是默认值时才迁移
         if !claude_config.enabled && claude_config.real_api_key.is_none() {
-            println!("🔄 检测到旧的透明代理配置，正在迁移到新架构...");
+            tracing::info!("检测到旧的透明代理配置，正在迁移到新架构");
 
             claude_config.enabled = config.transparent_proxy_enabled;
             claude_config.port = config.transparent_proxy_port;
@@ -67,7 +67,7 @@ fn migrate_proxy_config(config: &mut GlobalConfig) -> Result<(), String> {
             claude_config.real_base_url = config.transparent_proxy_real_base_url.clone();
             claude_config.allow_public = config.transparent_proxy_allow_public;
 
-            println!("✅ 配置迁移完成，Claude Code 代理配置已更新");
+            tracing::info!("配置迁移完成，Claude Code 代理配置已更新");
         }
 
         // 清除旧字段以防止重复迁移
@@ -93,7 +93,7 @@ fn migrate_proxy_config(config: &mut GlobalConfig) -> Result<(), String> {
                 .map_err(|e| format!("Failed to set file permissions: {}", e))?;
         }
 
-        println!("✅ 迁移配置已保存到磁盘");
+        tracing::info!("迁移配置已保存到磁盘");
     }
 
     Ok(())
@@ -115,28 +115,31 @@ fn migrate_session_config(config: &mut GlobalConfig) -> Result<(), String> {
             }
         }
 
+        // 清除全局标志，防止重复迁移覆盖用户的工具级设置
+        config.session_endpoint_config_enabled = false;
+
         if migrated {
-            println!("🔄 正在迁移全局会话端点配置到工具级...");
-
-            // 保存迁移后的配置到磁盘
-            let config_path = global_config_path()?;
-            let json = serde_json::to_string_pretty(config)
-                .map_err(|e| format!("Failed to serialize config: {}", e))?;
-            fs::write(&config_path, json).map_err(|e| format!("Failed to write config: {}", e))?;
-
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                let metadata = fs::metadata(&config_path)
-                    .map_err(|e| format!("Failed to get file metadata: {}", e))?;
-                let mut perms = metadata.permissions();
-                perms.set_mode(0o600);
-                fs::set_permissions(&config_path, perms)
-                    .map_err(|e| format!("Failed to set file permissions: {}", e))?;
-            }
-
-            println!("✅ 会话端点配置迁移完成");
+            tracing::info!("正在迁移全局会话端点配置到工具级");
         }
+
+        // 保存迁移后的配置到磁盘
+        let config_path = global_config_path()?;
+        let json = serde_json::to_string_pretty(config)
+            .map_err(|e| format!("Failed to serialize config: {}", e))?;
+        fs::write(&config_path, json).map_err(|e| format!("Failed to write config: {}", e))?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let metadata = fs::metadata(&config_path)
+                .map_err(|e| format!("Failed to get file metadata: {}", e))?;
+            let mut perms = metadata.permissions();
+            perms.set_mode(0o600);
+            fs::set_permissions(&config_path, perms)
+                .map_err(|e| format!("Failed to set file permissions: {}", e))?;
+        }
+
+        tracing::info!("会话端点配置迁移完成");
     }
 
     Ok(())

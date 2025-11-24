@@ -81,6 +81,9 @@ pub struct GlobalConfig {
     // 是否隐藏透明代理推荐提示（默认显示）
     #[serde(default)]
     pub hide_transparent_proxy_tip: bool,
+    // 是否隐藏会话级端点配置提示（默认显示）
+    #[serde(default)]
+    pub hide_session_config_hint: bool,
 }
 
 fn default_transparent_proxy_port() -> u16 {

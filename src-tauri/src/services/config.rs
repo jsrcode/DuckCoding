@@ -480,9 +480,10 @@ impl ConfigService {
                 // 只备份当前 provider 的完整配置
                 if let Some(providers) = doc.get("model_providers").and_then(|p| p.as_table()) {
                     if let Some(current_provider) = providers.get(current_provider_name) {
-                        println!(
-                            "📦 备份 Codex 配置：provider = {}, profile = {}",
-                            current_provider_name, profile_name
+                        tracing::debug!(
+                            provider = %current_provider_name,
+                            profile = %profile_name,
+                            "备份 Codex 配置"
                         );
                         let mut backup_providers = toml_edit::Table::new();
                         backup_providers.insert(current_provider_name, current_provider.clone());

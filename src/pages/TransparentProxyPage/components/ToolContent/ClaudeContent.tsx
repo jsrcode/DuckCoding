@@ -26,10 +26,8 @@ import {
 import { useSessionData } from '../../hooks/useSessionData';
 import { SessionConfigDialog } from '../SessionConfigDialog';
 import { SessionNoteDialog } from '../SessionNoteDialog';
-import { getGlobalConfig, type SessionRecord } from '@/lib/tauri-commands';
+import { getGlobalConfig, saveGlobalConfig, type SessionRecord } from '@/lib/tauri-commands';
 import { isActiveSession } from '@/utils/sessionHelpers';
-
-const DISMISS_KEY = 'duckcoding_session_config_hint_dismissed';
 
 /**
  * 渲染配置显示内容
@@ -211,31 +209,58 @@ export function ClaudeContent() {
 
   // 会话级端点配置状态
   const [sessionEndpointEnabled, setSessionEndpointEnabled] = useState<boolean | null>(null);
-  const [hintDismissed, setHintDismissed] = useState(() => {
-    return localStorage.getItem(DISMISS_KEY) === 'true';
-  });
+  const [hintDismissed, setHintDismissed] = useState(false);
   const [hintClosed, setHintClosed] = useState(false);
 
-  // 导航到设置页
-  const navigateToSettings = useCallback(() => {
-    window.dispatchEvent(new Event('navigate-to-settings'));
+  // 打开代理设置弹窗
+  const openProxySettings = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('open-proxy-settings', { detail: 'claude-code' }));
   }, []);
 
   // 加载配置状态
-  useEffect(() => {
+  const loadConfig = useCallback(() => {
     getGlobalConfig()
       .then((config) => {
-        setSessionEndpointEnabled(config?.session_endpoint_config_enabled ?? false);
+        // 使用 Claude Code 工具级别的会话端点配置
+        const claudeConfig = config?.proxy_configs?.['claude-code'];
+        setSessionEndpointEnabled(claudeConfig?.session_endpoint_config_enabled ?? false);
+        // 读取是否已隐藏提示
+        setHintDismissed(config?.hide_session_config_hint ?? false);
       })
       .catch(() => {
         setSessionEndpointEnabled(false);
+        setHintDismissed(false);
       });
   }, []);
 
+  useEffect(() => {
+    loadConfig();
+  }, [loadConfig]);
+
+  // 监听配置更新事件
+  useEffect(() => {
+    const handleConfigUpdate = () => {
+      loadConfig();
+    };
+    window.addEventListener('proxy-config-updated', handleConfigUpdate);
+    return () => {
+      window.removeEventListener('proxy-config-updated', handleConfigUpdate);
+    };
+  }, [loadConfig]);
+
   // 处理不再显示
-  const handleDismiss = useCallback(() => {
-    localStorage.setItem(DISMISS_KEY, 'true');
-    setHintDismissed(true);
+  const handleDismiss = useCallback(async () => {
+    try {
+      const config = await getGlobalConfig();
+      if (!config) return;
+      await saveGlobalConfig({
+        ...config,
+        hide_session_config_hint: true,
+      });
+      setHintDismissed(true);
+    } catch (error) {
+      console.error('保存提示设置失败:', error);
+    }
   }, []);
 
   // 处理关闭提示
@@ -262,7 +287,7 @@ export function ClaudeContent() {
   if (!sessionEndpointEnabled) {
     return (
       <DisabledHint
-        onNavigateToSettings={navigateToSettings}
+        onNavigateToSettings={openProxySettings}
         onDismiss={handleDismiss}
         onClose={handleClose}
         dismissed={hintDismissed}

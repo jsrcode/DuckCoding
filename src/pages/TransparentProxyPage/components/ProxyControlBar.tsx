@@ -1,7 +1,7 @@
 // 代理控制条组件
 // 提供代理启动/停止控制按钮和代理详情显示
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -208,6 +208,20 @@ export function ProxyControlBar({
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [shouldAutoStart, setShouldAutoStart] = useState(false); // 标记是否需要自动启动
+
+  // 监听打开设置弹窗事件（来自 ClaudeContent 等子组件）
+  useEffect(() => {
+    const handleOpenSettings = (event: Event) => {
+      const customEvent = event as CustomEvent<string>;
+      if (customEvent.detail === tool.id) {
+        setSettingsDialogOpen(true);
+      }
+    };
+    window.addEventListener('open-proxy-settings', handleOpenSettings);
+    return () => {
+      window.removeEventListener('open-proxy-settings', handleOpenSettings);
+    };
+  }, [tool.id]);
 
   // 检查上游配置是否缺失
   const isUpstreamConfigMissing = isRunning && (!config?.real_base_url || !config?.real_api_key);

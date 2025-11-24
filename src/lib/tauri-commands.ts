@@ -58,6 +58,8 @@ export interface GlobalConfig {
   session_endpoint_config_enabled?: boolean;
   // 是否隐藏透明代理推荐提示（默认显示）
   hide_transparent_proxy_tip?: boolean;
+  // 是否隐藏会话级端点配置提示（默认显示）
+  hide_session_config_hint?: boolean;
 }
 
 export interface GenerateApiKeyResult {
