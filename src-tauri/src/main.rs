@@ -5,7 +5,6 @@ use duckcoding::utils::config::apply_proxy_if_configured;
 use serde::Serialize;
 use std::env;
 use tauri::{
-    menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager, Runtime, WebviewWindow,
 };
