@@ -61,9 +61,22 @@ last-updated: 2025-11-23
 - Linux 装 `libwebkit2gtk-4.1-dev`、`libjavascriptcoregtk-4.1-dev`、`patchelf` 等 Tauri v2 依赖；Windows 确保 WebView2 Runtime（先查注册表，winget 安装失败则回退微软官方静默安装包）；Node 20.19.0，Rust stable（含 clippy / rustfmt），启用 npm 与 cargo 缓存。
 - CI 未通过不得合并；缺少 dist 时会在 `npm run check` 内自动触发 `npm run build` 以满足 Clippy 输入。
 
-## 架构记忆（2025-11-21）
+## 架构记忆（2025-11-29）
 
 - `src-tauri/src/main.rs` 仅保留应用启动与托盘事件注册，所有 Tauri Commands 拆分到 `src-tauri/src/commands/*`，服务实现位于 `services/*`，核心设施放在 `core/*`（HTTP、日志、错误）。
+- **工具管理系统**：
+  - 多环境架构：支持本地（Local）、WSL、SSH 三种环境的工具实例管理
+  - 数据模型：`ToolType`（环境类型）、`ToolSource`（DuckCodingManaged/External）、`ToolInstance`（工具实例）存储在 `models/tool.rs`
+  - SQLite 存储：`tool_instances` 表由 `services/tool/db::ToolInstanceDB` 管理，存储用户添加的 WSL/SSH 实例
+  - 混合架构：`services/tool/registry::ToolRegistry` 统一管理内置工具（自动检测）和用户工具（数据库读取）
+  - WSL 支持：`utils/wsl_executor::WSLExecutor` 提供 Windows 下的 WSL 命令执行和工具检测（10秒超时）
+  - 来源识别：通过安装路径自动判断工具来源（`~/.duckcoding/tool/bin/` 为 DuckCoding 管理，其它为外部安装）
+  - Tauri 命令：`get_tool_instances`、`refresh_tool_instances`、`add_wsl_tool_instance`、`add_ssh_tool_instance`、`delete_tool_instance`（位于 `commands/tool_management.rs`）
+  - 前端页面：`ToolManagementPage` 按工具（Claude Code/CodeX/Gemini CLI）分组展示，每个工具下列出所有环境实例，使用表格列表样式（`components/ToolListSection`）
+  - 功能支持：检测更新（仅 DuckCoding 管理 + 非 SSH）、版本管理（占位 UI）、删除实例（仅 SSH 非内置）
+  - 导航集成：AppSidebar 新增"工具管理"入口（Wrench 图标），原"安装工具"已注释
+  - 类型安全：完整的 TypeScript 类型定义在 `types/tool-management.ts`，Hook `useToolManagement` 负责状态管理和操作
+  - SSH 功能：本期仅保留 UI 和数据结构，实际功能禁用（`AddInstanceDialog` 和表格操作按钮灰显）
 - **透明代理已重构为多工具架构**：
   - `ProxyManager` 统一管理三个工具（Claude Code、Codex、Gemini CLI）的代理实例
   - `HeadersProcessor` trait 定义工具特定的 headers 处理逻辑（位于 `services/proxy/headers/`）

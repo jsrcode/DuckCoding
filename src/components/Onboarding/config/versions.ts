@@ -13,11 +13,13 @@ import LogFeatureStep from '@/components/Onboarding/steps/v2/LogFeatureStep';
 import SessionConfigStep from '@/components/Onboarding/steps/v2/SessionConfigStep';
 import UpdateCompleteStep from '@/components/Onboarding/steps/v2/UpdateCompleteStep';
 
+import ToolDetectionStep from '@/components/Onboarding/steps/v3/ToolDetectionStep';
+
 /**
  * 当前引导版本
  * 每次添加新版本时更新此常量
  */
-export const CURRENT_ONBOARDING_VERSION = 'v2';
+export const CURRENT_ONBOARDING_VERSION = 'v3';
 
 /**
  * 各版本的引导步骤配置
@@ -84,6 +86,15 @@ export const VERSION_STEPS: VersionStepsMap = {
       skippable: false,
     },
   ],
+  v3: [
+    {
+      id: 'tool-detection',
+      title: '检测系统工具',
+      description: '扫描已安装的 AI 编程工具',
+      component: ToolDetectionStep,
+      skippable: false,
+    },
+  ],
 };
 
 /**
@@ -117,10 +128,26 @@ export function getRequiredSteps(completedVersion: string | null): OnboardingSte
       }
     }
 
+    // 重新排序步骤：将 tool-detection 移到 welcome 之后
+    const toolDetectionStep = allSteps.find((s) => s.id === 'tool-detection');
+    if (toolDetectionStep) {
+      const welcomeIndex = allSteps.findIndex((s) => s.id === 'welcome');
+      const tdIndex = allSteps.findIndex((s) => s.id === 'tool-detection');
+      if (welcomeIndex !== -1 && tdIndex !== -1 && tdIndex !== welcomeIndex + 1) {
+        // 移除 tool-detection
+        allSteps.splice(tdIndex, 1);
+        // 插入到 welcome 之后
+        allSteps.splice(welcomeIndex + 1, 0, toolDetectionStep);
+      }
+    }
+
     // 如果包含多个版本，移除衔接处的重复步骤
-    // 移除 v1 的 complete 步骤和 v2+ 的 update-welcome 步骤
+    // 移除 v1 的 complete 步骤和 v2+ 的 update-welcome/update-complete 步骤
     if (versions.length > 1 && compareVersions(currentVersion, 'v1') > 0) {
-      return allSteps.filter((step) => step.id !== 'complete' && step.id !== 'update-welcome');
+      return allSteps.filter(
+        (step) =>
+          step.id !== 'complete' && step.id !== 'update-welcome' && step.id !== 'update-complete',
+      );
     }
 
     return allSteps;
