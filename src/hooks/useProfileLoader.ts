@@ -25,16 +25,15 @@ export function useProfileLoader(
   const [activeConfigs, setActiveConfigs] = useState<Record<string, ActiveConfig>>({});
 
   /**
-   * 并行加载所有已安装工具的配置
+   * 并行加载所有工具的配置（即便未检测到二进制也尝试读取配置目录）
    */
   const loadAllProfiles = useCallback(async () => {
-    const installedTools = tools.filter((t) => t.installed);
     const profileData: Record<string, string[]> = {};
     const configData: Record<string, ActiveConfig> = {};
 
     // 并行加载所有工具的配置，提升性能
     const results = await Promise.allSettled(
-      installedTools.flatMap((tool) => [
+      tools.flatMap((tool) => [
         listProfiles(tool.id).then((profiles) => ({
           tool,
           type: 'profiles' as const,
@@ -63,7 +62,7 @@ export function useProfileLoader(
     });
 
     // 确保所有工具都有数据（即使加载失败）
-    installedTools.forEach((tool) => {
+    tools.forEach((tool) => {
       if (!profileData[tool.id]) {
         profileData[tool.id] = [];
       }

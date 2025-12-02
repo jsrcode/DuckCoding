@@ -39,6 +39,8 @@ export default defineConfig(async () => ({
           'chart-vendor': ['recharts', 'date-fns'],
           // 拆分 UI 组件库
           'ui-vendor': ['lucide-react'],
+          // Tauri 相关依赖单独打包，避免挤入主 chunk
+          'tauri-vendor': ['@tauri-apps/api', '@tauri-apps/plugin-shell'],
         },
       },
     },

@@ -70,7 +70,7 @@ pub struct LogConfig {
 }
 
 /// 新用户引导状态
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct OnboardingStatus {
     /// 已完成的引导版本（例如："v1", "v2"）
     pub completed_version: String,
@@ -177,6 +177,12 @@ pub struct GlobalConfig {
     // 新用户引导状态
     #[serde(default)]
     pub onboarding_status: Option<OnboardingStatus>,
+    /// 外部改动监听是否开启（notify + 轮询）
+    #[serde(default = "default_external_watch_enabled")]
+    pub external_watch_enabled: bool,
+    /// 外部改动轮询间隔（毫秒），用于前端补偿刷新
+    #[serde(default = "default_external_poll_interval_ms")]
+    pub external_poll_interval_ms: u64,
 }
 
 fn default_transparent_proxy_port() -> u16 {
@@ -281,4 +287,12 @@ impl GlobalConfig {
             // 可选：self.session_endpoint_config_enabled = false;
         }
     }
+}
+
+fn default_external_watch_enabled() -> bool {
+    true
+}
+
+fn default_external_poll_interval_ms() -> u64 {
+    5000
 }

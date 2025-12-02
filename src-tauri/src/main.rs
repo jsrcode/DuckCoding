@@ -4,6 +4,7 @@
 use duckcoding::utils::config::apply_proxy_if_configured;
 use serde::Serialize;
 use std::env;
+use std::sync::Mutex;
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -15,12 +16,18 @@ mod commands;
 use commands::*;
 
 // 导入透明代理服务
-use duckcoding::{ProxyManager, ToolStatusCache, TransparentProxyService};
+use duckcoding::TransparentProxyService;
+use duckcoding::{services::config_watcher::NotifyWatcherManager, services::EXTERNAL_CHANGE_EVENT};
+use duckcoding::{ProxyManager, ToolStatusCache};
 use std::sync::Arc;
 use tokio::sync::Mutex as TokioMutex;
 
 const CLOSE_CONFIRM_EVENT: &str = "duckcoding://request-close-action";
 const SINGLE_INSTANCE_EVENT: &str = "single-instance";
+
+struct ExternalWatcherState {
+    manager: Mutex<Option<NotifyWatcherManager>>,
+}
 
 #[derive(Clone, Serialize)]
 struct SingleInstancePayload {
@@ -155,6 +162,9 @@ fn main() {
     let transparent_proxy_state = TransparentProxyState {
         service: Arc::new(TokioMutex::new(transparent_proxy_service)),
     };
+    let watcher_state = ExternalWatcherState {
+        manager: Mutex::new(None),
+    };
 
     // 创建多工具代理管理器（新架构）
     let proxy_manager = Arc::new(ProxyManager::new());
@@ -189,6 +199,7 @@ fn main() {
     let builder = tauri::Builder::default()
         .manage(transparent_proxy_state)
         .manage(proxy_manager_state)
+        .manage(watcher_state)
         .manage(update_service_state)
         .manage(tool_status_cache_state)
         .manage(tool_registry_state)
@@ -232,6 +243,39 @@ fn main() {
             }
 
             tracing::info!(working_dir = ?env::current_dir(), "当前工作目录");
+
+            // 启动通知式配置 watcher（若可用），增加日志方便排查
+            if let Some(state) = app.try_state::<ExternalWatcherState>() {
+                let enable_watch = match duckcoding::utils::config::read_global_config() {
+                    Ok(Some(cfg)) => cfg.external_watch_enabled,
+                    _ => true,
+                };
+                if !enable_watch {
+                    tracing::info!("External config watcher disabled by config");
+                }
+
+                if let Ok(mut guard) = state.manager.lock() {
+                    if guard.is_none() && enable_watch {
+                        match NotifyWatcherManager::start_all(app.handle().clone()) {
+                            Ok(manager) => {
+                                tracing::debug!(
+                                    "Config notify watchers started, emitting event {EXTERNAL_CHANGE_EVENT}"
+                                );
+                                *guard = Some(manager);
+                            }
+                            Err(err) => {
+                                tracing::error!("Failed to start notify watchers: {err:?}");
+                            }
+                        }
+                    } else {
+                        tracing::info!(
+                            already_running = guard.is_some(),
+                            enable_watch,
+                            "Skip starting notify watcher"
+                        );
+                    }
+                }
+            }
 
             // 创建系统托盘菜单
             let tray_menu = create_tray_menu(app.handle())?;
@@ -370,6 +414,12 @@ fn main() {
             save_global_config,
             get_global_config,
             generate_api_key_for_tool,
+            get_migration_report,
+            list_profile_descriptors,
+            get_external_changes,
+            ack_external_change,
+            clean_legacy_backups,
+            import_native_change,
             get_usage_stats,
             get_user_quota,
             fetch_api,
@@ -402,6 +452,11 @@ fn main() {
             clear_all_sessions,
             update_session_config,
             update_session_note,
+            // 配置监听控制
+            get_watcher_status,
+            start_watcher_if_needed,
+            stop_watcher,
+            save_watcher_settings,
             // 更新管理相关命令
             check_for_app_updates,
             download_app_update,

@@ -2,19 +2,19 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/google-gemini/gemini-cli/main/schemas/settings.schema.json",
   "title": "Gemini CLI Settings",
-  "description": "Gemini CLI 设置文件的 JSON Schema，可为 `settings.json` 提供 IDE 自动补全与校验。",
+  "description": "Configuration file schema for Gemini CLI settings. This schema enables IDE completion for `settings.json`.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
     "$schema": {
       "title": "Schema",
-      "description": "settings.json 使用的 JSON Schema 地址，供编辑器校验和自动补全使用。",
+      "description": "The URL of the JSON schema for this settings file. Used by editors for validation and autocompletion.",
       "type": "string",
       "default": "https://raw.githubusercontent.com/google-gemini/gemini-cli/main/schemas/settings.schema.json"
     },
     "mcpServers": {
       "title": "MCP Servers",
-      "description": "MCP 服务器的配置集合。",
+      "description": "Configuration for MCP servers.",
       "markdownDescription": "Configuration for MCP servers.\n\n- Category: `Advanced`\n- Requires restart: `yes`\n- Default: `{}`",
       "default": {},
       "type": "object",
@@ -24,55 +24,55 @@
     },
     "general": {
       "title": "General",
-      "description": "通用应用层设置。",
+      "description": "General application settings.",
       "markdownDescription": "General application settings.\n\n- Category: `General`\n- Requires restart: `no`\n- Default: `{}`",
       "default": {},
       "type": "object",
       "properties": {
         "previewFeatures": {
           "title": "Preview Features (e.g., models)",
-          "description": "启用预览特性（如预览模型）。",
+          "description": "Enable preview features (e.g., preview models).",
           "markdownDescription": "Enable preview features (e.g., preview models).\n\n- Category: `General`\n- Requires restart: `no`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
         "preferredEditor": {
           "title": "Preferred Editor",
-          "description": "打开文件时首选的编辑器。",
+          "description": "The preferred editor to open files in.",
           "markdownDescription": "The preferred editor to open files in.\n\n- Category: `General`\n- Requires restart: `no`",
           "type": "string"
         },
         "vimMode": {
           "title": "Vim Mode",
-          "description": "是否启用 Vim 键位映射。",
+          "description": "Enable Vim keybindings",
           "markdownDescription": "Enable Vim keybindings\n\n- Category: `General`\n- Requires restart: `no`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
         "disableAutoUpdate": {
           "title": "Disable Auto Update",
-          "description": "是否禁用自动更新。",
+          "description": "Disable automatic updates",
           "markdownDescription": "Disable automatic updates\n\n- Category: `General`\n- Requires restart: `no`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
         "disableUpdateNag": {
           "title": "Disable Update Nag",
-          "description": "是否关闭更新提醒通知。",
+          "description": "Disable update notification prompts.",
           "markdownDescription": "Disable update notification prompts.\n\n- Category: `General`\n- Requires restart: `no`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
         "checkpointing": {
           "title": "Checkpointing",
-          "description": "会话检查点（Checkpoint）相关设置。",
+          "description": "Session checkpointing settings.",
           "markdownDescription": "Session checkpointing settings.\n\n- Category: `General`\n- Requires restart: `yes`\n- Default: `{}`",
           "default": {},
           "type": "object",
           "properties": {
             "enabled": {
               "title": "Enable Checkpointing",
-              "description": "是否启用会话检查点以便恢复。",
+              "description": "Enable session checkpointing for recovery",
               "markdownDescription": "Enable session checkpointing for recovery\n\n- Category: `General`\n- Requires restart: `yes`\n- Default: `false`",
               "default": false,
               "type": "boolean"
@@ -82,53 +82,53 @@
         },
         "enablePromptCompletion": {
           "title": "Enable Prompt Completion",
-          "description": "输入时是否启用 AI 驱动的提示补全建议。",
+          "description": "Enable AI-powered prompt completion suggestions while typing.",
           "markdownDescription": "Enable AI-powered prompt completion suggestions while typing.\n\n- Category: `General`\n- Requires restart: `yes`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
         "retryFetchErrors": {
           "title": "Retry Fetch Errors",
-          "description": "遇到 “exception TypeError: fetch failed sending request” 时是否自动重试。",
+          "description": "Retry on \"exception TypeError: fetch failed sending request\" errors.",
           "markdownDescription": "Retry on \"exception TypeError: fetch failed sending request\" errors.\n\n- Category: `General`\n- Requires restart: `no`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
         "debugKeystrokeLogging": {
           "title": "Debug Keystroke Logging",
-          "description": "是否在控制台输出按键级调试日志。",
+          "description": "Enable debug logging of keystrokes to the console.",
           "markdownDescription": "Enable debug logging of keystrokes to the console.\n\n- Category: `General`\n- Requires restart: `no`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
         "sessionRetention": {
           "title": "Session Retention",
-          "description": "自动清理历史会话的相关设置。",
+          "description": "Settings for automatic session cleanup.",
           "markdownDescription": "Settings for automatic session cleanup.\n\n- Category: `General`\n- Requires restart: `no`",
           "type": "object",
           "properties": {
             "enabled": {
               "title": "Enable Session Cleanup",
-              "description": "是否开启自动会话清理。",
+              "description": "Enable automatic session cleanup",
               "markdownDescription": "Enable automatic session cleanup\n\n- Category: `General`\n- Requires restart: `no`\n- Default: `false`",
               "default": false,
               "type": "boolean"
             },
             "maxAge": {
               "title": "Max Session Age",
-              "description": "保留会话的最长时间（例如 \"30d\"、\"7d\"、\"24h\"、\"1w\"）。",
+              "description": "Maximum age of sessions to keep (e.g., \"30d\", \"7d\", \"24h\", \"1w\")",
               "markdownDescription": "Maximum age of sessions to keep (e.g., \"30d\", \"7d\", \"24h\", \"1w\")\n\n- Category: `General`\n- Requires restart: `no`",
               "type": "string"
             },
             "maxCount": {
               "title": "Max Session Count",
-              "description": "可选项：保留的最大会话数量（按最近顺序）。",
+              "description": "Alternative: Maximum number of sessions to keep (most recent)",
               "markdownDescription": "Alternative: Maximum number of sessions to keep (most recent)\n\n- Category: `General`\n- Requires restart: `no`",
               "type": "number"
             },
             "minRetention": {
               "title": "Min Retention Period",
-              "description": "最短保留期限（安全下限，默认 \"1d\"）。",
+              "description": "Minimum retention period (safety limit, defaults to \"1d\")",
               "markdownDescription": "Minimum retention period (safety limit, defaults to \"1d\")\n\n- Category: `General`\n- Requires restart: `no`\n- Default: `1d`",
               "default": "1d",
               "type": "string"
@@ -141,14 +141,14 @@
     },
     "output": {
       "title": "Output",
-      "description": "CLI 输出相关设置。",
+      "description": "Settings for the CLI output.",
       "markdownDescription": "Settings for the CLI output.\n\n- Category: `General`\n- Requires restart: `no`\n- Default: `{}`",
       "default": {},
       "type": "object",
       "properties": {
         "format": {
           "title": "Output Format",
-          "description": "CLI 输出的格式类型。",
+          "description": "The format of the CLI output.",
           "markdownDescription": "The format of the CLI output.\n\n- Category: `General`\n- Requires restart: `no`\n- Default: `text`",
           "default": "text",
           "type": "string",
@@ -159,20 +159,20 @@
     },
     "ui": {
       "title": "UI",
-      "description": "界面层设置。",
+      "description": "User interface settings.",
       "markdownDescription": "User interface settings.\n\n- Category: `UI`\n- Requires restart: `no`\n- Default: `{}`",
       "default": {},
       "type": "object",
       "properties": {
         "theme": {
           "title": "Theme",
-          "description": "界面的配色主题，可参考 CLI 主题指南获取可选值。",
+          "description": "The color theme for the UI. See the CLI themes guide for available options.",
           "markdownDescription": "The color theme for the UI. See the CLI themes guide for available options.\n\n- Category: `UI`\n- Requires restart: `no`",
           "type": "string"
         },
         "customThemes": {
           "title": "Custom Themes",
-          "description": "自定义主题定义。",
+          "description": "Custom theme definitions.",
           "markdownDescription": "Custom theme definitions.\n\n- Category: `UI`\n- Requires restart: `no`\n- Default: `{}`",
           "default": {},
           "type": "object",
@@ -182,70 +182,70 @@
         },
         "hideWindowTitle": {
           "title": "Hide Window Title",
-          "description": "隐藏窗口标题栏。",
+          "description": "Hide the window title bar",
           "markdownDescription": "Hide the window title bar\n\n- Category: `UI`\n- Requires restart: `yes`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
         "showStatusInTitle": {
           "title": "Show Status in Title",
-          "description": "在终端窗口标题中显示 Gemini CLI 状态与思路。",
+          "description": "Show Gemini CLI status and thoughts in the terminal window title",
           "markdownDescription": "Show Gemini CLI status and thoughts in the terminal window title\n\n- Category: `UI`\n- Requires restart: `no`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
         "hideTips": {
           "title": "Hide Tips",
-          "description": "隐藏界面中的提示信息。",
+          "description": "Hide helpful tips in the UI",
           "markdownDescription": "Hide helpful tips in the UI\n\n- Category: `UI`\n- Requires restart: `no`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
         "hideBanner": {
           "title": "Hide Banner",
-          "description": "隐藏应用横幅。",
+          "description": "Hide the application banner",
           "markdownDescription": "Hide the application banner\n\n- Category: `UI`\n- Requires restart: `no`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
         "hideContextSummary": {
           "title": "Hide Context Summary",
-          "description": "隐藏输入框上方的上下文摘要（GEMINI.md、MCP 服务器等）。",
+          "description": "Hide the context summary (GEMINI.md, MCP servers) above the input.",
           "markdownDescription": "Hide the context summary (GEMINI.md, MCP servers) above the input.\n\n- Category: `UI`\n- Requires restart: `no`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
         "footer": {
           "title": "Footer",
-          "description": "页脚区域的设置。",
+          "description": "Settings for the footer.",
           "markdownDescription": "Settings for the footer.\n\n- Category: `UI`\n- Requires restart: `no`\n- Default: `{}`",
           "default": {},
           "type": "object",
           "properties": {
             "hideCWD": {
               "title": "Hide CWD",
-              "description": "在页脚隐藏当前工作目录路径。",
+              "description": "Hide the current working directory path in the footer.",
               "markdownDescription": "Hide the current working directory path in the footer.\n\n- Category: `UI`\n- Requires restart: `no`\n- Default: `false`",
               "default": false,
               "type": "boolean"
             },
             "hideSandboxStatus": {
               "title": "Hide Sandbox Status",
-              "description": "在页脚隐藏沙箱状态指示。",
+              "description": "Hide the sandbox status indicator in the footer.",
               "markdownDescription": "Hide the sandbox status indicator in the footer.\n\n- Category: `UI`\n- Requires restart: `no`\n- Default: `false`",
               "default": false,
               "type": "boolean"
             },
             "hideModelInfo": {
               "title": "Hide Model Info",
-              "description": "在页脚隐藏模型名称与上下文占用信息。",
+              "description": "Hide the model name and context usage in the footer.",
               "markdownDescription": "Hide the model name and context usage in the footer.\n\n- Category: `UI`\n- Requires restart: `no`\n- Default: `false`",
               "default": false,
               "type": "boolean"
             },
             "hideContextPercentage": {
               "title": "Hide Context Window Percentage",
-              "description": "隐藏上下文窗口剩余百分比。",
+              "description": "Hides the context window remaining percentage.",
               "markdownDescription": "Hides the context window remaining percentage.\n\n- Category: `UI`\n- Requires restart: `no`\n- Default: `true`",
               "default": true,
               "type": "boolean"
@@ -255,63 +255,63 @@
         },
         "hideFooter": {
           "title": "Hide Footer",
-          "description": "在界面中隐藏页脚。",
+          "description": "Hide the footer from the UI",
           "markdownDescription": "Hide the footer from the UI\n\n- Category: `UI`\n- Requires restart: `no`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
         "showMemoryUsage": {
           "title": "Show Memory Usage",
-          "description": "在界面上显示内存使用信息。",
+          "description": "Display memory usage information in the UI",
           "markdownDescription": "Display memory usage information in the UI\n\n- Category: `UI`\n- Requires restart: `no`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
         "showLineNumbers": {
           "title": "Show Line Numbers",
-          "description": "在对话区域显示行号。",
-          "markdownDescription": "Show line numbers in the chat.\n\n- Category: `UI`\n- Requires restart: `no`\n- Default: `false`",
-          "default": false,
+          "description": "Show line numbers in the chat.",
+          "markdownDescription": "Show line numbers in the chat.\n\n- Category: `UI`\n- Requires restart: `no`\n- Default: `true`",
+          "default": true,
           "type": "boolean"
         },
         "showCitations": {
           "title": "Show Citations",
-          "description": "在对话中为生成文本显示引用来源。",
+          "description": "Show citations for generated text in the chat.",
           "markdownDescription": "Show citations for generated text in the chat.\n\n- Category: `UI`\n- Requires restart: `no`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
         "showModelInfoInChat": {
           "title": "Show Model Info In Chat",
-          "description": "在对话中显示每轮使用的模型名称。",
+          "description": "Show the model name in the chat for each model turn.",
           "markdownDescription": "Show the model name in the chat for each model turn.\n\n- Category: `UI`\n- Requires restart: `no`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
         "useFullWidth": {
           "title": "Use Full Width",
-          "description": "输出内容铺满整个终端宽度。",
-          "markdownDescription": "Use the entire width of the terminal for output.\n\n- Category: `UI`\n- Requires restart: `no`\n- Default: `false`",
-          "default": false,
+          "description": "Use the entire width of the terminal for output.",
+          "markdownDescription": "Use the entire width of the terminal for output.\n\n- Category: `UI`\n- Requires restart: `no`\n- Default: `true`",
+          "default": true,
           "type": "boolean"
         },
         "useAlternateBuffer": {
           "title": "Use Alternate Screen Buffer",
-          "description": "使用备用屏幕缓冲区渲染 UI，以保留 shell 历史。",
+          "description": "Use an alternate screen buffer for the UI, preserving shell history.",
           "markdownDescription": "Use an alternate screen buffer for the UI, preserving shell history.\n\n- Category: `UI`\n- Requires restart: `yes`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
         "incrementalRendering": {
           "title": "Incremental Rendering",
-          "description": "启用增量渲染以减少闪烁（仅在 useAlternateBuffer 开启时可用，可能出现轻微渲染伪影）。",
+          "description": "Enable incremental rendering for the UI. This option will reduce flickering but may cause rendering artifacts. Only supported when useAlternateBuffer is enabled.",
           "markdownDescription": "Enable incremental rendering for the UI. This option will reduce flickering but may cause rendering artifacts. Only supported when useAlternateBuffer is enabled.\n\n- Category: `UI`\n- Requires restart: `yes`\n- Default: `true`",
           "default": true,
           "type": "boolean"
         },
         "customWittyPhrases": {
           "title": "Custom Witty Phrases",
-          "description": "自定义加载时显示的妙语，提供后会循环使用这些语句而非默认文案。",
+          "description": "Custom witty phrases to display during loading. When provided, the CLI cycles through these instead of the defaults.",
           "markdownDescription": "Custom witty phrases to display during loading. When provided, the CLI cycles through these instead of the defaults.\n\n- Category: `UI`\n- Requires restart: `no`\n- Default: `[]`",
           "default": [],
           "type": "array",
@@ -321,21 +321,21 @@
         },
         "accessibility": {
           "title": "Accessibility",
-          "description": "无障碍可访问性设置。",
+          "description": "Accessibility settings.",
           "markdownDescription": "Accessibility settings.\n\n- Category: `UI`\n- Requires restart: `yes`\n- Default: `{}`",
           "default": {},
           "type": "object",
           "properties": {
             "disableLoadingPhrases": {
               "title": "Disable Loading Phrases",
-              "description": "出于无障碍考虑，停用加载提示语。",
+              "description": "Disable loading phrases for accessibility",
               "markdownDescription": "Disable loading phrases for accessibility\n\n- Category: `UI`\n- Requires restart: `yes`\n- Default: `false`",
               "default": false,
               "type": "boolean"
             },
             "screenReader": {
               "title": "Screen Reader Mode",
-              "description": "以纯文本方式渲染输出，便于屏幕阅读器读取。",
+              "description": "Render output in plain-text to be more screen reader accessible",
               "markdownDescription": "Render output in plain-text to be more screen reader accessible\n\n- Category: `UI`\n- Requires restart: `yes`\n- Default: `false`",
               "default": false,
               "type": "boolean"
@@ -348,21 +348,21 @@
     },
     "ide": {
       "title": "IDE",
-      "description": "IDE 集成功能相关设置。",
+      "description": "IDE integration settings.",
       "markdownDescription": "IDE integration settings.\n\n- Category: `IDE`\n- Requires restart: `yes`\n- Default: `{}`",
       "default": {},
       "type": "object",
       "properties": {
         "enabled": {
           "title": "IDE Mode",
-          "description": "是否启用 IDE 集成模式。",
+          "description": "Enable IDE integration mode",
           "markdownDescription": "Enable IDE integration mode\n\n- Category: `IDE`\n- Requires restart: `yes`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
         "hasSeenNudge": {
           "title": "Has Seen IDE Integration Nudge",
-          "description": "用户是否已经看到 IDE 集成提示。",
+          "description": "Whether the user has seen the IDE integration nudge.",
           "markdownDescription": "Whether the user has seen the IDE integration nudge.\n\n- Category: `IDE`\n- Requires restart: `no`\n- Default: `false`",
           "default": false,
           "type": "boolean"
@@ -372,14 +372,14 @@
     },
     "privacy": {
       "title": "Privacy",
-      "description": "隐私相关设置。",
+      "description": "Privacy-related settings.",
       "markdownDescription": "Privacy-related settings.\n\n- Category: `Privacy`\n- Requires restart: `yes`\n- Default: `{}`",
       "default": {},
       "type": "object",
       "properties": {
         "usageStatisticsEnabled": {
           "title": "Enable Usage Statistics",
-          "description": "是否允许收集使用统计数据。",
+          "description": "Enable collection of usage statistics",
           "markdownDescription": "Enable collection of usage statistics\n\n- Category: `Privacy`\n- Requires restart: `yes`\n- Default: `true`",
           "default": true,
           "type": "boolean"
@@ -389,33 +389,33 @@
     },
     "telemetry": {
       "title": "Telemetry",
-      "description": "遥测与统计相关配置。",
+      "description": "Telemetry configuration.",
       "markdownDescription": "Telemetry configuration.\n\n- Category: `Advanced`\n- Requires restart: `yes`",
       "$ref": "#/$defs/TelemetrySettings"
     },
     "model": {
       "title": "Model",
-      "description": "与生成式模型相关的设置。",
+      "description": "Settings related to the generative model.",
       "markdownDescription": "Settings related to the generative model.\n\n- Category: `Model`\n- Requires restart: `no`\n- Default: `{}`",
       "default": {},
       "type": "object",
       "properties": {
         "name": {
           "title": "Model",
-          "description": "用于对话的 Gemini 模型名称。",
+          "description": "The Gemini model to use for conversations.",
           "markdownDescription": "The Gemini model to use for conversations.\n\n- Category: `Model`\n- Requires restart: `no`",
           "type": "string"
         },
         "maxSessionTurns": {
           "title": "Max Session Turns",
-          "description": "单个会话保留的用户/模型/工具回合上限，-1 表示不限制。",
+          "description": "Maximum number of user/model/tool turns to keep in a session. -1 means unlimited.",
           "markdownDescription": "Maximum number of user/model/tool turns to keep in a session. -1 means unlimited.\n\n- Category: `Model`\n- Requires restart: `no`\n- Default: `-1`",
           "default": -1,
           "type": "number"
         },
         "summarizeToolOutput": {
           "title": "Summarize Tool Output",
-          "description": "控制是否对工具输出进行摘要，可通过每个工具的 tokenBudget（如 {\"run_shell_command\": {\"tokenBudget\": 2000}}）设置摘要成本。目前仅 run_shell_command 支持该功能。",
+          "description": "Enables or disables summarization of tool output. Configure per-tool token budgets (for example {\"run_shell_command\": {\"tokenBudget\": 2000}}). Currently only the run_shell_command tool supports summarization.",
           "markdownDescription": "Enables or disables summarization of tool output. Configure per-tool token budgets (for example {\"run_shell_command\": {\"tokenBudget\": 2000}}). Currently only the run_shell_command tool supports summarization.\n\n- Category: `Model`\n- Requires restart: `no`",
           "type": "object",
           "additionalProperties": {
@@ -424,14 +424,14 @@
         },
         "compressionThreshold": {
           "title": "Compression Threshold",
-          "description": "当上下文占用达到该比例时触发压缩（例如 0.2、0.3）。",
-          "markdownDescription": "The fraction of context usage at which to trigger context compression (e.g. 0.2, 0.3).\n\n- Category: `Model`\n- Requires restart: `yes`\n- Default: `0.2`",
-          "default": 0.2,
+          "description": "The fraction of context usage at which to trigger context compression (e.g. 0.2, 0.3).",
+          "markdownDescription": "The fraction of context usage at which to trigger context compression (e.g. 0.2, 0.3).\n\n- Category: `Model`\n- Requires restart: `yes`\n- Default: `0.5`",
+          "default": 0.5,
           "type": "number"
         },
         "skipNextSpeakerCheck": {
           "title": "Skip Next Speaker Check",
-          "description": "跳过下一次说话者校验。",
+          "description": "Skip the next speaker check.",
           "markdownDescription": "Skip the next speaker check.\n\n- Category: `Model`\n- Requires restart: `no`\n- Default: `true`",
           "default": true,
           "type": "boolean"
@@ -441,8 +441,8 @@
     },
     "modelConfigs": {
       "title": "Model Configs",
-      "description": "模型配置集合。",
-      "markdownDescription": "Model configurations.\n\n- Category: `Model`\n- Requires restart: `no`\n- Default: `{\"aliases\":{\"base\":{\"modelConfig\":{\"generateContentConfig\":{\"temperature\":0,\"topP\":1}}},\"chat-base\":{\"extends\":\"base\",\"modelConfig\":{\"generateContentConfig\":{\"thinkingConfig\":{\"includeThoughts\":true,\"thinkingBudget\":-1}}}},\"gemini-2.5-pro\":{\"extends\":\"chat-base\",\"modelConfig\":{\"model\":\"gemini-2.5-pro\"}},\"gemini-2.5-flash\":{\"extends\":\"chat-base\",\"modelConfig\":{\"model\":\"gemini-2.5-flash\"}},\"gemini-2.5-flash-lite\":{\"extends\":\"chat-base\",\"modelConfig\":{\"model\":\"gemini-2.5-flash-lite\"}},\"gemini-2.5-flash-base\":{\"extends\":\"base\",\"modelConfig\":{\"model\":\"gemini-2.5-flash\"}},\"classifier\":{\"extends\":\"base\",\"modelConfig\":{\"model\":\"gemini-2.5-flash-lite\",\"generateContentConfig\":{\"maxOutputTokens\":1024,\"thinkingConfig\":{\"thinkingBudget\":512}}}},\"prompt-completion\":{\"extends\":\"base\",\"modelConfig\":{\"model\":\"gemini-2.5-flash-lite\",\"generateContentConfig\":{\"temperature\":0.3,\"maxOutputTokens\":16000,\"thinkingConfig\":{\"thinkingBudget\":0}}}},\"edit-corrector\":{\"extends\":\"base\",\"modelConfig\":{\"model\":\"gemini-2.5-flash-lite\",\"generateContentConfig\":{\"thinkingConfig\":{\"thinkingBudget\":0}}}},\"summarizer-default\":{\"extends\":\"base\",\"modelConfig\":{\"model\":\"gemini-2.5-flash-lite\",\"generateContentConfig\":{\"maxOutputTokens\":2000}}},\"summarizer-shell\":{\"extends\":\"base\",\"modelConfig\":{\"model\":\"gemini-2.5-flash-lite\",\"generateContentConfig\":{\"maxOutputTokens\":2000}}},\"web-search-tool\":{\"extends\":\"gemini-2.5-flash-base\",\"modelConfig\":{\"generateContentConfig\":{\"tools\":[{\"googleSearch\":{}}]}}},\"web-fetch-tool\":{\"extends\":\"gemini-2.5-flash-base\",\"modelConfig\":{\"generateContentConfig\":{\"tools\":[{\"urlContext\":{}}]}}},\"loop-detection\":{\"extends\":\"gemini-2.5-flash-base\",\"modelConfig\":{}},\"llm-edit-fixer\":{\"extends\":\"gemini-2.5-flash-base\",\"modelConfig\":{}},\"next-speaker-checker\":{\"extends\":\"gemini-2.5-flash-base\",\"modelConfig\":{}}}}`",
+      "description": "Model configurations.",
+      "markdownDescription": "Model configurations.\n\n- Category: `Model`\n- Requires restart: `no`\n- Default: `{\n  \"aliases\": {\n    \"base\": {\n      \"modelConfig\": {\n        \"generateContentConfig\": {\n          \"temperature\": 0,\n          \"topP\": 1\n        }\n      }\n    },\n    \"chat-base\": {\n      \"extends\": \"base\",\n      \"modelConfig\": {\n        \"generateContentConfig\": {\n          \"thinkingConfig\": {\n            \"includeThoughts\": true\n          },\n          \"temperature\": 1,\n          \"topP\": 0.95,\n          \"topK\": 64\n        }\n      }\n    },\n    \"chat-base-2.5\": {\n      \"extends\": \"chat-base\",\n      \"modelConfig\": {\n        \"generateContentConfig\": {\n          \"thinkingConfig\": {\n            \"thinkingBudget\": 8192\n          }\n        }\n      }\n    },\n    \"chat-base-3\": {\n      \"extends\": \"chat-base\",\n      \"modelConfig\": {\n        \"generateContentConfig\": {\n          \"thinkingConfig\": {\n            \"thinkingLevel\": \"HIGH\"\n          }\n        }\n      }\n    },\n    \"gemini-3-pro-preview\": {\n      \"extends\": \"chat-base-3\",\n      \"modelConfig\": {\n        \"model\": \"gemini-3-pro-preview\"\n      }\n    },\n    \"gemini-2.5-pro\": {\n      \"extends\": \"chat-base-2.5\",\n      \"modelConfig\": {\n        \"model\": \"gemini-2.5-pro\"\n      }\n    },\n    \"gemini-2.5-flash\": {\n      \"extends\": \"chat-base-2.5\",\n      \"modelConfig\": {\n        \"model\": \"gemini-2.5-flash\"\n      }\n    },\n    \"gemini-2.5-flash-lite\": {\n      \"extends\": \"chat-base-2.5\",\n      \"modelConfig\": {\n        \"model\": \"gemini-2.5-flash-lite\"\n      }\n    },\n    \"gemini-2.5-flash-base\": {\n      \"extends\": \"base\",\n      \"modelConfig\": {\n        \"model\": \"gemini-2.5-flash\"\n      }\n    },\n    \"classifier\": {\n      \"extends\": \"base\",\n      \"modelConfig\": {\n        \"model\": \"gemini-2.5-flash-lite\",\n        \"generateContentConfig\": {\n          \"maxOutputTokens\": 1024,\n          \"thinkingConfig\": {\n            \"thinkingBudget\": 512\n          }\n        }\n      }\n    },\n    \"prompt-completion\": {\n      \"extends\": \"base\",\n      \"modelConfig\": {\n        \"model\": \"gemini-2.5-flash-lite\",\n        \"generateContentConfig\": {\n          \"temperature\": 0.3,\n          \"maxOutputTokens\": 16000,\n          \"thinkingConfig\": {\n            \"thinkingBudget\": 0\n          }\n        }\n      }\n    },\n    \"edit-corrector\": {\n      \"extends\": \"base\",\n      \"modelConfig\": {\n        \"model\": \"gemini-2.5-flash-lite\",\n        \"generateContentConfig\": {\n          \"thinkingConfig\": {\n            \"thinkingBudget\": 0\n          }\n        }\n      }\n    },\n    \"summarizer-default\": {\n      \"extends\": \"base\",\n      \"modelConfig\": {\n        \"model\": \"gemini-2.5-flash-lite\",\n        \"generateContentConfig\": {\n          \"maxOutputTokens\": 2000\n        }\n      }\n    },\n    \"summarizer-shell\": {\n      \"extends\": \"base\",\n      \"modelConfig\": {\n        \"model\": \"gemini-2.5-flash-lite\",\n        \"generateContentConfig\": {\n          \"maxOutputTokens\": 2000\n        }\n      }\n    },\n    \"web-search\": {\n      \"extends\": \"gemini-2.5-flash-base\",\n      \"modelConfig\": {\n        \"generateContentConfig\": {\n          \"tools\": [\n            {\n              \"googleSearch\": {}\n            }\n          ]\n        }\n      }\n    },\n    \"web-fetch\": {\n      \"extends\": \"gemini-2.5-flash-base\",\n      \"modelConfig\": {\n        \"generateContentConfig\": {\n          \"tools\": [\n            {\n              \"urlContext\": {}\n            }\n          ]\n        }\n      }\n    },\n    \"web-fetch-fallback\": {\n      \"extends\": \"gemini-2.5-flash-base\",\n      \"modelConfig\": {}\n    },\n    \"loop-detection\": {\n      \"extends\": \"gemini-2.5-flash-base\",\n      \"modelConfig\": {}\n    },\n    \"loop-detection-double-check\": {\n      \"extends\": \"base\",\n      \"modelConfig\": {\n        \"model\": \"gemini-2.5-pro\"\n      }\n    },\n    \"llm-edit-fixer\": {\n      \"extends\": \"gemini-2.5-flash-base\",\n      \"modelConfig\": {}\n    },\n    \"next-speaker-checker\": {\n      \"extends\": \"gemini-2.5-flash-base\",\n      \"modelConfig\": {}\n    },\n    \"chat-compression-3-pro\": {\n      \"modelConfig\": {\n        \"model\": \"gemini-3-pro-preview\"\n      }\n    },\n    \"chat-compression-2.5-pro\": {\n      \"modelConfig\": {\n        \"model\": \"gemini-2.5-pro\"\n      }\n    },\n    \"chat-compression-2.5-flash\": {\n      \"modelConfig\": {\n        \"model\": \"gemini-2.5-flash\"\n      }\n    },\n    \"chat-compression-2.5-flash-lite\": {\n      \"modelConfig\": {\n        \"model\": \"gemini-2.5-flash-lite\"\n      }\n    },\n    \"chat-compression-default\": {\n      \"modelConfig\": {\n        \"model\": \"gemini-2.5-pro\"\n      }\n    }\n  }\n}`",
       "default": {
         "aliases": {
           "base": {
@@ -458,26 +458,54 @@
             "modelConfig": {
               "generateContentConfig": {
                 "thinkingConfig": {
-                  "includeThoughts": true,
-                  "thinkingBudget": -1
+                  "includeThoughts": true
+                },
+                "temperature": 1,
+                "topP": 0.95,
+                "topK": 64
+              }
+            }
+          },
+          "chat-base-2.5": {
+            "extends": "chat-base",
+            "modelConfig": {
+              "generateContentConfig": {
+                "thinkingConfig": {
+                  "thinkingBudget": 8192
                 }
               }
             }
           },
-          "gemini-2.5-pro": {
+          "chat-base-3": {
             "extends": "chat-base",
+            "modelConfig": {
+              "generateContentConfig": {
+                "thinkingConfig": {
+                  "thinkingLevel": "HIGH"
+                }
+              }
+            }
+          },
+          "gemini-3-pro-preview": {
+            "extends": "chat-base-3",
+            "modelConfig": {
+              "model": "gemini-3-pro-preview"
+            }
+          },
+          "gemini-2.5-pro": {
+            "extends": "chat-base-2.5",
             "modelConfig": {
               "model": "gemini-2.5-pro"
             }
           },
           "gemini-2.5-flash": {
-            "extends": "chat-base",
+            "extends": "chat-base-2.5",
             "modelConfig": {
               "model": "gemini-2.5-flash"
             }
           },
           "gemini-2.5-flash-lite": {
-            "extends": "chat-base",
+            "extends": "chat-base-2.5",
             "modelConfig": {
               "model": "gemini-2.5-flash-lite"
             }
@@ -542,7 +570,7 @@
               }
             }
           },
-          "web-search-tool": {
+          "web-search": {
             "extends": "gemini-2.5-flash-base",
             "modelConfig": {
               "generateContentConfig": {
@@ -554,7 +582,7 @@
               }
             }
           },
-          "web-fetch-tool": {
+          "web-fetch": {
             "extends": "gemini-2.5-flash-base",
             "modelConfig": {
               "generateContentConfig": {
@@ -566,9 +594,19 @@
               }
             }
           },
+          "web-fetch-fallback": {
+            "extends": "gemini-2.5-flash-base",
+            "modelConfig": {}
+          },
           "loop-detection": {
             "extends": "gemini-2.5-flash-base",
             "modelConfig": {}
+          },
+          "loop-detection-double-check": {
+            "extends": "base",
+            "modelConfig": {
+              "model": "gemini-2.5-pro"
+            }
           },
           "llm-edit-fixer": {
             "extends": "gemini-2.5-flash-base",
@@ -577,6 +615,31 @@
           "next-speaker-checker": {
             "extends": "gemini-2.5-flash-base",
             "modelConfig": {}
+          },
+          "chat-compression-3-pro": {
+            "modelConfig": {
+              "model": "gemini-3-pro-preview"
+            }
+          },
+          "chat-compression-2.5-pro": {
+            "modelConfig": {
+              "model": "gemini-2.5-pro"
+            }
+          },
+          "chat-compression-2.5-flash": {
+            "modelConfig": {
+              "model": "gemini-2.5-flash"
+            }
+          },
+          "chat-compression-2.5-flash-lite": {
+            "modelConfig": {
+              "model": "gemini-2.5-flash-lite"
+            }
+          },
+          "chat-compression-default": {
+            "modelConfig": {
+              "model": "gemini-2.5-pro"
+            }
           }
         }
       },
@@ -584,8 +647,8 @@
       "properties": {
         "aliases": {
           "title": "Model Config Aliases",
-          "description": "模型配置的命名预设，可在模型名称位置直接引用，并可通过 `extends` 继承其他别名。",
-          "markdownDescription": "Named presets for model configs. Can be used in place of a model name and can inherit from other aliases using an `extends` property.\n\n- Category: `Model`\n- Requires restart: `no`\n- Default: `{\"base\":{\"modelConfig\":{\"generateContentConfig\":{\"temperature\":0,\"topP\":1}}},\"chat-base\":{\"extends\":\"base\",\"modelConfig\":{\"generateContentConfig\":{\"thinkingConfig\":{\"includeThoughts\":true,\"thinkingBudget\":-1}}}},\"gemini-2.5-pro\":{\"extends\":\"chat-base\",\"modelConfig\":{\"model\":\"gemini-2.5-pro\"}},\"gemini-2.5-flash\":{\"extends\":\"chat-base\",\"modelConfig\":{\"model\":\"gemini-2.5-flash\"}},\"gemini-2.5-flash-lite\":{\"extends\":\"chat-base\",\"modelConfig\":{\"model\":\"gemini-2.5-flash-lite\"}},\"gemini-2.5-flash-base\":{\"extends\":\"base\",\"modelConfig\":{\"model\":\"gemini-2.5-flash\"}},\"classifier\":{\"extends\":\"base\",\"modelConfig\":{\"model\":\"gemini-2.5-flash-lite\",\"generateContentConfig\":{\"maxOutputTokens\":1024,\"thinkingConfig\":{\"thinkingBudget\":512}}}},\"prompt-completion\":{\"extends\":\"base\",\"modelConfig\":{\"model\":\"gemini-2.5-flash-lite\",\"generateContentConfig\":{\"temperature\":0.3,\"maxOutputTokens\":16000,\"thinkingConfig\":{\"thinkingBudget\":0}}}},\"edit-corrector\":{\"extends\":\"base\",\"modelConfig\":{\"model\":\"gemini-2.5-flash-lite\",\"generateContentConfig\":{\"thinkingConfig\":{\"thinkingBudget\":0}}}},\"summarizer-default\":{\"extends\":\"base\",\"modelConfig\":{\"model\":\"gemini-2.5-flash-lite\",\"generateContentConfig\":{\"maxOutputTokens\":2000}}},\"summarizer-shell\":{\"extends\":\"base\",\"modelConfig\":{\"model\":\"gemini-2.5-flash-lite\",\"generateContentConfig\":{\"maxOutputTokens\":2000}}},\"web-search-tool\":{\"extends\":\"gemini-2.5-flash-base\",\"modelConfig\":{\"generateContentConfig\":{\"tools\":[{\"googleSearch\":{}}]}}},\"web-fetch-tool\":{\"extends\":\"gemini-2.5-flash-base\",\"modelConfig\":{\"generateContentConfig\":{\"tools\":[{\"urlContext\":{}}]}}},\"loop-detection\":{\"extends\":\"gemini-2.5-flash-base\",\"modelConfig\":{}},\"llm-edit-fixer\":{\"extends\":\"gemini-2.5-flash-base\",\"modelConfig\":{}},\"next-speaker-checker\":{\"extends\":\"gemini-2.5-flash-base\",\"modelConfig\":{}}}`",
+          "description": "Named presets for model configs. Can be used in place of a model name and can inherit from other aliases using an `extends` property.",
+          "markdownDescription": "Named presets for model configs. Can be used in place of a model name and can inherit from other aliases using an `extends` property.\n\n- Category: `Model`\n- Requires restart: `no`\n- Default: `{\n  \"base\": {\n    \"modelConfig\": {\n      \"generateContentConfig\": {\n        \"temperature\": 0,\n        \"topP\": 1\n      }\n    }\n  },\n  \"chat-base\": {\n    \"extends\": \"base\",\n    \"modelConfig\": {\n      \"generateContentConfig\": {\n        \"thinkingConfig\": {\n          \"includeThoughts\": true\n        },\n        \"temperature\": 1,\n        \"topP\": 0.95,\n        \"topK\": 64\n      }\n    }\n  },\n  \"chat-base-2.5\": {\n    \"extends\": \"chat-base\",\n    \"modelConfig\": {\n      \"generateContentConfig\": {\n        \"thinkingConfig\": {\n          \"thinkingBudget\": 8192\n        }\n      }\n    }\n  },\n  \"chat-base-3\": {\n    \"extends\": \"chat-base\",\n    \"modelConfig\": {\n      \"generateContentConfig\": {\n        \"thinkingConfig\": {\n          \"thinkingLevel\": \"HIGH\"\n        }\n      }\n    }\n  },\n  \"gemini-3-pro-preview\": {\n    \"extends\": \"chat-base-3\",\n    \"modelConfig\": {\n      \"model\": \"gemini-3-pro-preview\"\n    }\n  },\n  \"gemini-2.5-pro\": {\n    \"extends\": \"chat-base-2.5\",\n    \"modelConfig\": {\n      \"model\": \"gemini-2.5-pro\"\n    }\n  },\n  \"gemini-2.5-flash\": {\n    \"extends\": \"chat-base-2.5\",\n    \"modelConfig\": {\n      \"model\": \"gemini-2.5-flash\"\n    }\n  },\n  \"gemini-2.5-flash-lite\": {\n    \"extends\": \"chat-base-2.5\",\n    \"modelConfig\": {\n      \"model\": \"gemini-2.5-flash-lite\"\n    }\n  },\n  \"gemini-2.5-flash-base\": {\n    \"extends\": \"base\",\n    \"modelConfig\": {\n      \"model\": \"gemini-2.5-flash\"\n    }\n  },\n  \"classifier\": {\n    \"extends\": \"base\",\n    \"modelConfig\": {\n      \"model\": \"gemini-2.5-flash-lite\",\n      \"generateContentConfig\": {\n        \"maxOutputTokens\": 1024,\n        \"thinkingConfig\": {\n          \"thinkingBudget\": 512\n        }\n      }\n    }\n  },\n  \"prompt-completion\": {\n    \"extends\": \"base\",\n    \"modelConfig\": {\n      \"model\": \"gemini-2.5-flash-lite\",\n      \"generateContentConfig\": {\n        \"temperature\": 0.3,\n        \"maxOutputTokens\": 16000,\n        \"thinkingConfig\": {\n          \"thinkingBudget\": 0\n        }\n      }\n    }\n  },\n  \"edit-corrector\": {\n    \"extends\": \"base\",\n    \"modelConfig\": {\n      \"model\": \"gemini-2.5-flash-lite\",\n      \"generateContentConfig\": {\n        \"thinkingConfig\": {\n          \"thinkingBudget\": 0\n        }\n      }\n    }\n  },\n  \"summarizer-default\": {\n    \"extends\": \"base\",\n    \"modelConfig\": {\n      \"model\": \"gemini-2.5-flash-lite\",\n      \"generateContentConfig\": {\n        \"maxOutputTokens\": 2000\n      }\n    }\n  },\n  \"summarizer-shell\": {\n    \"extends\": \"base\",\n    \"modelConfig\": {\n      \"model\": \"gemini-2.5-flash-lite\",\n      \"generateContentConfig\": {\n        \"maxOutputTokens\": 2000\n      }\n    }\n  },\n  \"web-search\": {\n    \"extends\": \"gemini-2.5-flash-base\",\n    \"modelConfig\": {\n      \"generateContentConfig\": {\n        \"tools\": [\n          {\n            \"googleSearch\": {}\n          }\n        ]\n      }\n    }\n  },\n  \"web-fetch\": {\n    \"extends\": \"gemini-2.5-flash-base\",\n    \"modelConfig\": {\n      \"generateContentConfig\": {\n        \"tools\": [\n          {\n            \"urlContext\": {}\n          }\n        ]\n      }\n    }\n  },\n  \"web-fetch-fallback\": {\n    \"extends\": \"gemini-2.5-flash-base\",\n    \"modelConfig\": {}\n  },\n  \"loop-detection\": {\n    \"extends\": \"gemini-2.5-flash-base\",\n    \"modelConfig\": {}\n  },\n  \"loop-detection-double-check\": {\n    \"extends\": \"base\",\n    \"modelConfig\": {\n      \"model\": \"gemini-2.5-pro\"\n    }\n  },\n  \"llm-edit-fixer\": {\n    \"extends\": \"gemini-2.5-flash-base\",\n    \"modelConfig\": {}\n  },\n  \"next-speaker-checker\": {\n    \"extends\": \"gemini-2.5-flash-base\",\n    \"modelConfig\": {}\n  },\n  \"chat-compression-3-pro\": {\n    \"modelConfig\": {\n      \"model\": \"gemini-3-pro-preview\"\n    }\n  },\n  \"chat-compression-2.5-pro\": {\n    \"modelConfig\": {\n      \"model\": \"gemini-2.5-pro\"\n    }\n  },\n  \"chat-compression-2.5-flash\": {\n    \"modelConfig\": {\n      \"model\": \"gemini-2.5-flash\"\n    }\n  },\n  \"chat-compression-2.5-flash-lite\": {\n    \"modelConfig\": {\n      \"model\": \"gemini-2.5-flash-lite\"\n    }\n  },\n  \"chat-compression-default\": {\n    \"modelConfig\": {\n      \"model\": \"gemini-2.5-pro\"\n    }\n  }\n}`",
           "default": {
             "base": {
               "modelConfig": {
@@ -600,26 +663,54 @@
               "modelConfig": {
                 "generateContentConfig": {
                   "thinkingConfig": {
-                    "includeThoughts": true,
-                    "thinkingBudget": -1
+                    "includeThoughts": true
+                  },
+                  "temperature": 1,
+                  "topP": 0.95,
+                  "topK": 64
+                }
+              }
+            },
+            "chat-base-2.5": {
+              "extends": "chat-base",
+              "modelConfig": {
+                "generateContentConfig": {
+                  "thinkingConfig": {
+                    "thinkingBudget": 8192
                   }
                 }
               }
             },
-            "gemini-2.5-pro": {
+            "chat-base-3": {
               "extends": "chat-base",
+              "modelConfig": {
+                "generateContentConfig": {
+                  "thinkingConfig": {
+                    "thinkingLevel": "HIGH"
+                  }
+                }
+              }
+            },
+            "gemini-3-pro-preview": {
+              "extends": "chat-base-3",
+              "modelConfig": {
+                "model": "gemini-3-pro-preview"
+              }
+            },
+            "gemini-2.5-pro": {
+              "extends": "chat-base-2.5",
               "modelConfig": {
                 "model": "gemini-2.5-pro"
               }
             },
             "gemini-2.5-flash": {
-              "extends": "chat-base",
+              "extends": "chat-base-2.5",
               "modelConfig": {
                 "model": "gemini-2.5-flash"
               }
             },
             "gemini-2.5-flash-lite": {
-              "extends": "chat-base",
+              "extends": "chat-base-2.5",
               "modelConfig": {
                 "model": "gemini-2.5-flash-lite"
               }
@@ -684,7 +775,7 @@
                 }
               }
             },
-            "web-search-tool": {
+            "web-search": {
               "extends": "gemini-2.5-flash-base",
               "modelConfig": {
                 "generateContentConfig": {
@@ -696,7 +787,7 @@
                 }
               }
             },
-            "web-fetch-tool": {
+            "web-fetch": {
               "extends": "gemini-2.5-flash-base",
               "modelConfig": {
                 "generateContentConfig": {
@@ -708,9 +799,19 @@
                 }
               }
             },
+            "web-fetch-fallback": {
+              "extends": "gemini-2.5-flash-base",
+              "modelConfig": {}
+            },
             "loop-detection": {
               "extends": "gemini-2.5-flash-base",
               "modelConfig": {}
+            },
+            "loop-detection-double-check": {
+              "extends": "base",
+              "modelConfig": {
+                "model": "gemini-2.5-pro"
+              }
             },
             "llm-edit-fixer": {
               "extends": "gemini-2.5-flash-base",
@@ -719,6 +820,31 @@
             "next-speaker-checker": {
               "extends": "gemini-2.5-flash-base",
               "modelConfig": {}
+            },
+            "chat-compression-3-pro": {
+              "modelConfig": {
+                "model": "gemini-3-pro-preview"
+              }
+            },
+            "chat-compression-2.5-pro": {
+              "modelConfig": {
+                "model": "gemini-2.5-pro"
+              }
+            },
+            "chat-compression-2.5-flash": {
+              "modelConfig": {
+                "model": "gemini-2.5-flash"
+              }
+            },
+            "chat-compression-2.5-flash-lite": {
+              "modelConfig": {
+                "model": "gemini-2.5-flash-lite"
+              }
+            },
+            "chat-compression-default": {
+              "modelConfig": {
+                "model": "gemini-2.5-pro"
+              }
             }
           },
           "type": "object",
@@ -726,7 +852,7 @@
         },
         "customAliases": {
           "title": "Custom Model Config Aliases",
-          "description": "自定义模型配置别名，会与内置别名合并并可覆盖内置设置。",
+          "description": "Custom named presets for model configs. These are merged with (and override) the built-in aliases.",
           "markdownDescription": "Custom named presets for model configs. These are merged with (and override) the built-in aliases.\n\n- Category: `Model`\n- Requires restart: `no`\n- Default: `{}`",
           "default": {},
           "type": "object",
@@ -734,7 +860,7 @@
         },
         "overrides": {
           "title": "Model Config Overrides",
-          "description": "基于匹配结果应用特定配置覆盖，主键为模型或别名，采用匹配度最高的配置。",
+          "description": "Apply specific configuration overrides based on matches, with a primary key of model (or alias). The most specific match will be used.",
           "markdownDescription": "Apply specific configuration overrides based on matches, with a primary key of model (or alias). The most specific match will be used.\n\n- Category: `Model`\n- Requires restart: `no`\n- Default: `[]`",
           "default": [],
           "type": "array",
@@ -745,33 +871,33 @@
     },
     "context": {
       "title": "Context",
-      "description": "管理提供给模型的上下文配置。",
+      "description": "Settings for managing context provided to the model.",
       "markdownDescription": "Settings for managing context provided to the model.\n\n- Category: `Context`\n- Requires restart: `no`\n- Default: `{}`",
       "default": {},
       "type": "object",
       "properties": {
         "fileName": {
           "title": "Context File Name",
-          "description": "需要载入内存的上下文文件名，支持单个字符串或字符串数组。",
+          "description": "The name of the context file or files to load into memory. Accepts either a single string or an array of strings.",
           "markdownDescription": "The name of the context file or files to load into memory. Accepts either a single string or an array of strings.\n\n- Category: `Context`\n- Requires restart: `no`",
           "$ref": "#/$defs/StringOrStringArray"
         },
         "importFormat": {
           "title": "Memory Import Format",
-          "description": "导入记忆数据时采用的格式。",
+          "description": "The format to use when importing memory.",
           "markdownDescription": "The format to use when importing memory.\n\n- Category: `Context`\n- Requires restart: `no`",
           "type": "string"
         },
         "discoveryMaxDirs": {
           "title": "Memory Discovery Max Dirs",
-          "description": "扫描记忆文件时允许搜索的目录上限。",
+          "description": "Maximum number of directories to search for memory.",
           "markdownDescription": "Maximum number of directories to search for memory.\n\n- Category: `Context`\n- Requires restart: `no`\n- Default: `200`",
           "default": 200,
           "type": "number"
         },
         "includeDirectories": {
           "title": "Include Directories",
-          "description": "纳入工作区上下文的额外目录，缺失目录会跳过并提示。",
+          "description": "Additional directories to include in the workspace context. Missing directories will be skipped with a warning.",
           "markdownDescription": "Additional directories to include in the workspace context. Missing directories will be skipped with a warning.\n\n- Category: `Context`\n- Requires restart: `no`\n- Default: `[]`",
           "default": [],
           "type": "array",
@@ -781,42 +907,42 @@
         },
         "loadMemoryFromIncludeDirectories": {
           "title": "Load Memory From Include Directories",
-          "description": "控制 /memory refresh 加载 GEMINI.md 的范围。true 时扫描 include 目录，false 仅使用当前目录。",
+          "description": "Controls how /memory refresh loads GEMINI.md files. When true, include directories are scanned; when false, only the current directory is used.",
           "markdownDescription": "Controls how /memory refresh loads GEMINI.md files. When true, include directories are scanned; when false, only the current directory is used.\n\n- Category: `Context`\n- Requires restart: `no`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
         "fileFiltering": {
           "title": "File Filtering",
-          "description": "基于 git 的文件过滤设置。",
+          "description": "Settings for git-aware file filtering.",
           "markdownDescription": "Settings for git-aware file filtering.\n\n- Category: `Context`\n- Requires restart: `yes`\n- Default: `{}`",
           "default": {},
           "type": "object",
           "properties": {
             "respectGitIgnore": {
               "title": "Respect .gitignore",
-              "description": "搜索时遵循 .gitignore 规则。",
+              "description": "Respect .gitignore files when searching",
               "markdownDescription": "Respect .gitignore files when searching\n\n- Category: `Context`\n- Requires restart: `yes`\n- Default: `true`",
               "default": true,
               "type": "boolean"
             },
             "respectGeminiIgnore": {
               "title": "Respect .geminiignore",
-              "description": "搜索时遵循 .geminiignore 规则。",
+              "description": "Respect .geminiignore files when searching",
               "markdownDescription": "Respect .geminiignore files when searching\n\n- Category: `Context`\n- Requires restart: `yes`\n- Default: `true`",
               "default": true,
               "type": "boolean"
             },
             "enableRecursiveFileSearch": {
               "title": "Enable Recursive File Search",
-              "description": "在输入 @ 引用时启用递归文件搜索。",
+              "description": "Enable recursive file search functionality when completing @ references in the prompt.",
               "markdownDescription": "Enable recursive file search functionality when completing @ references in the prompt.\n\n- Category: `Context`\n- Requires restart: `yes`\n- Default: `true`",
               "default": true,
               "type": "boolean"
             },
             "disableFuzzySearch": {
               "title": "Disable Fuzzy Search",
-              "description": "禁用文件查找时的模糊搜索。",
+              "description": "Disable fuzzy search when searching for files.",
               "markdownDescription": "Disable fuzzy search when searching for files.\n\n- Category: `Context`\n- Requires restart: `yes`\n- Default: `false`",
               "default": false,
               "type": "boolean"
@@ -829,48 +955,48 @@
     },
     "tools": {
       "title": "Tools",
-      "description": "内置与自定义工具相关设置。",
+      "description": "Settings for built-in and custom tools.",
       "markdownDescription": "Settings for built-in and custom tools.\n\n- Category: `Tools`\n- Requires restart: `yes`\n- Default: `{}`",
       "default": {},
       "type": "object",
       "properties": {
         "sandbox": {
           "title": "Sandbox",
-          "description": "沙箱执行环境，可用布尔值启用/禁用，或提供沙箱配置路径。",
+          "description": "Sandbox execution environment. Set to a boolean to enable or disable the sandbox, or provide a string path to a sandbox profile.",
           "markdownDescription": "Sandbox execution environment. Set to a boolean to enable or disable the sandbox, or provide a string path to a sandbox profile.\n\n- Category: `Tools`\n- Requires restart: `yes`",
           "$ref": "#/$defs/BooleanOrString"
         },
         "shell": {
           "title": "Shell",
-          "description": "Shell 执行相关设置。",
+          "description": "Settings for shell execution.",
           "markdownDescription": "Settings for shell execution.\n\n- Category: `Tools`\n- Requires restart: `no`\n- Default: `{}`",
           "default": {},
           "type": "object",
           "properties": {
             "enableInteractiveShell": {
               "title": "Enable Interactive Shell",
-              "description": "使用 node-pty 提供交互式 Shell 体验，仍会在需要时回退至 child_process。",
+              "description": "Use node-pty for an interactive shell experience. Fallback to child_process still applies.",
               "markdownDescription": "Use node-pty for an interactive shell experience. Fallback to child_process still applies.\n\n- Category: `Tools`\n- Requires restart: `yes`\n- Default: `true`",
               "default": true,
               "type": "boolean"
             },
             "pager": {
               "title": "Pager",
-              "description": "Shell 输出使用的分页命令，默认为 `cat`。",
+              "description": "The pager command to use for shell output. Defaults to `cat`.",
               "markdownDescription": "The pager command to use for shell output. Defaults to `cat`.\n\n- Category: `Tools`\n- Requires restart: `no`\n- Default: `cat`",
               "default": "cat",
               "type": "string"
             },
             "showColor": {
               "title": "Show Color",
-              "description": "在 Shell 输出中显示颜色。",
+              "description": "Show color in shell output.",
               "markdownDescription": "Show color in shell output.\n\n- Category: `Tools`\n- Requires restart: `no`\n- Default: `false`",
               "default": false,
               "type": "boolean"
             },
             "inactivityTimeout": {
               "title": "Inactivity Timeout",
-              "description": "Shell 命令在无输出时允许的最长秒数，默认 300 秒。",
+              "description": "The maximum time in seconds allowed without output from the shell command. Defaults to 5 minutes.",
               "markdownDescription": "The maximum time in seconds allowed without output from the shell command. Defaults to 5 minutes.\n\n- Category: `Tools`\n- Requires restart: `no`\n- Default: `300`",
               "default": 300,
               "type": "number"
@@ -880,14 +1006,14 @@
         },
         "autoAccept": {
           "title": "Auto Accept",
-          "description": "自动接受并执行被认定为安全的工具调用（如只读操作）。",
+          "description": "Automatically accept and execute tool calls that are considered safe (e.g., read-only operations).",
           "markdownDescription": "Automatically accept and execute tool calls that are considered safe (e.g., read-only operations).\n\n- Category: `Tools`\n- Requires restart: `no`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
         "core": {
           "title": "Core Tools",
-          "description": "通过允许列表限制可用的内置工具，匹配逻辑与 tools.allowed 相同，具体名称见工具文档。",
+          "description": "Restrict the set of built-in tools with an allowlist. Match semantics mirror tools.allowed; see the built-in tools documentation for available names.",
           "markdownDescription": "Restrict the set of built-in tools with an allowlist. Match semantics mirror tools.allowed; see the built-in tools documentation for available names.\n\n- Category: `Tools`\n- Requires restart: `yes`",
           "type": "array",
           "items": {
@@ -896,7 +1022,7 @@
         },
         "allowed": {
           "title": "Allowed Tools",
-          "description": "免确认的工具名称，适用于可信命令（例如 [\"run_shell_command(git)\", \"run_shell_command(npm test)\"]），匹配规则参见 shell 工具限制说明。",
+          "description": "Tool names that bypass the confirmation dialog. Useful for trusted commands (for example [\"run_shell_command(git)\", \"run_shell_command(npm test)\"]). See shell tool command restrictions for matching details.",
           "markdownDescription": "Tool names that bypass the confirmation dialog. Useful for trusted commands (for example [\"run_shell_command(git)\", \"run_shell_command(npm test)\"]). See shell tool command restrictions for matching details.\n\n- Category: `Advanced`\n- Requires restart: `yes`",
           "type": "array",
           "items": {
@@ -905,7 +1031,7 @@
         },
         "exclude": {
           "title": "Exclude Tools",
-          "description": "在工具发现过程中需要排除的工具名称。",
+          "description": "Tool names to exclude from discovery.",
           "markdownDescription": "Tool names to exclude from discovery.\n\n- Category: `Tools`\n- Requires restart: `yes`",
           "type": "array",
           "items": {
@@ -914,54 +1040,54 @@
         },
         "discoveryCommand": {
           "title": "Tool Discovery Command",
-          "description": "执行工具发现流程所使用的命令。",
+          "description": "Command to run for tool discovery.",
           "markdownDescription": "Command to run for tool discovery.\n\n- Category: `Tools`\n- Requires restart: `yes`",
           "type": "string"
         },
         "callCommand": {
           "title": "Tool Call Command",
-          "description": "自定义调用发现到的工具的 shell 命令。需以工具名为首个参数，从 stdin 读取 JSON 参数，并在 stdout 输出 JSON 结果。",
+          "description": "Defines a custom shell command for invoking discovered tools. The command must take the tool name as the first argument, read JSON arguments from stdin, and emit JSON results on stdout.",
           "markdownDescription": "Defines a custom shell command for invoking discovered tools. The command must take the tool name as the first argument, read JSON arguments from stdin, and emit JSON results on stdout.\n\n- Category: `Tools`\n- Requires restart: `yes`",
           "type": "string"
         },
         "useRipgrep": {
           "title": "Use Ripgrep",
-          "description": "使用 ripgrep 进行文件内容搜索，以获取更快性能。",
+          "description": "Use ripgrep for file content search instead of the fallback implementation. Provides faster search performance.",
           "markdownDescription": "Use ripgrep for file content search instead of the fallback implementation. Provides faster search performance.\n\n- Category: `Tools`\n- Requires restart: `no`\n- Default: `true`",
           "default": true,
           "type": "boolean"
         },
         "enableToolOutputTruncation": {
           "title": "Enable Tool Output Truncation",
-          "description": "启用对大体积工具输出的截断。",
+          "description": "Enable truncation of large tool outputs.",
           "markdownDescription": "Enable truncation of large tool outputs.\n\n- Category: `General`\n- Requires restart: `yes`\n- Default: `true`",
           "default": true,
           "type": "boolean"
         },
         "truncateToolOutputThreshold": {
           "title": "Tool Output Truncation Threshold",
-          "description": "当输出字符数超过该阈值时进行截断，-1 表示禁用。",
+          "description": "Truncate tool output if it is larger than this many characters. Set to -1 to disable.",
           "markdownDescription": "Truncate tool output if it is larger than this many characters. Set to -1 to disable.\n\n- Category: `General`\n- Requires restart: `yes`\n- Default: `4000000`",
           "default": 4000000,
           "type": "number"
         },
         "truncateToolOutputLines": {
           "title": "Tool Output Truncation Lines",
-          "description": "截断后需要保留的输出行数。",
+          "description": "The number of lines to keep when truncating tool output.",
           "markdownDescription": "The number of lines to keep when truncating tool output.\n\n- Category: `General`\n- Requires restart: `yes`\n- Default: `1000`",
           "default": 1000,
           "type": "number"
         },
         "enableMessageBusIntegration": {
           "title": "Enable Message Bus Integration",
-          "description": "通过消息总线启用策略驱动的工具确认，工具会自动遵守策略引擎的 ALLOW/DENY/ASK_USER 决策，无需单独实现。",
+          "description": "Enable policy-based tool confirmation via message bus integration. When enabled, tools automatically respect policy engine decisions (ALLOW/DENY/ASK_USER) without requiring individual tool implementations.",
           "markdownDescription": "Enable policy-based tool confirmation via message bus integration. When enabled, tools automatically respect policy engine decisions (ALLOW/DENY/ASK_USER) without requiring individual tool implementations.\n\n- Category: `Tools`\n- Requires restart: `yes`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
         "enableHooks": {
           "title": "Enable Hooks System",
-          "description": "启用钩子系统以拦截并自定义 Gemini CLI 行为，钩子会在 BeforeTool/AfterTool/BeforeModel 等阶段执行，需要消息总线集成。",
+          "description": "Enable the hooks system for intercepting and customizing Gemini CLI behavior. When enabled, hooks configured in settings will execute at appropriate lifecycle events (BeforeTool, AfterTool, BeforeModel, etc.). Requires MessageBus integration.",
           "markdownDescription": "Enable the hooks system for intercepting and customizing Gemini CLI behavior. When enabled, hooks configured in settings will execute at appropriate lifecycle events (BeforeTool, AfterTool, BeforeModel, etc.). Requires MessageBus integration.\n\n- Category: `Advanced`\n- Requires restart: `yes`\n- Default: `false`",
           "default": false,
           "type": "boolean"
@@ -971,20 +1097,20 @@
     },
     "mcp": {
       "title": "MCP",
-      "description": "Model Context Protocol (MCP) 服务器的相关设置。",
+      "description": "Settings for Model Context Protocol (MCP) servers.",
       "markdownDescription": "Settings for Model Context Protocol (MCP) servers.\n\n- Category: `MCP`\n- Requires restart: `yes`\n- Default: `{}`",
       "default": {},
       "type": "object",
       "properties": {
         "serverCommand": {
           "title": "MCP Server Command",
-          "description": "启动 MCP 服务器的命令。",
+          "description": "Command to start an MCP server.",
           "markdownDescription": "Command to start an MCP server.\n\n- Category: `MCP`\n- Requires restart: `yes`",
           "type": "string"
         },
         "allowed": {
           "title": "Allow MCP Servers",
-          "description": "允许的 MCP 服务器列表。",
+          "description": "A list of MCP servers to allow.",
           "markdownDescription": "A list of MCP servers to allow.\n\n- Category: `MCP`\n- Requires restart: `yes`",
           "type": "array",
           "items": {
@@ -993,7 +1119,7 @@
         },
         "excluded": {
           "title": "Exclude MCP Servers",
-          "description": "需要排除的 MCP 服务器列表。",
+          "description": "A list of MCP servers to exclude.",
           "markdownDescription": "A list of MCP servers to exclude.\n\n- Category: `MCP`\n- Requires restart: `yes`",
           "type": "array",
           "items": {
@@ -1005,49 +1131,49 @@
     },
     "useSmartEdit": {
       "title": "Use Smart Edit",
-      "description": "启用 smart-edit 工具以替代 replace 工具。",
+      "description": "Enable the smart-edit tool instead of the replace tool.",
       "markdownDescription": "Enable the smart-edit tool instead of the replace tool.\n\n- Category: `Advanced`\n- Requires restart: `no`\n- Default: `true`",
       "default": true,
       "type": "boolean"
     },
     "useWriteTodos": {
-      "title": "Use Write Todos",
-      "description": "启用 write_todos_list 工具。",
-      "markdownDescription": "Enable the write_todos_list tool.\n\n- Category: `Advanced`\n- Requires restart: `no`\n- Default: `false`",
-      "default": false,
+      "title": "Use WriteTodos",
+      "description": "Enable the write_todos tool.",
+      "markdownDescription": "Enable the write_todos tool.\n\n- Category: `Advanced`\n- Requires restart: `no`\n- Default: `true`",
+      "default": true,
       "type": "boolean"
     },
     "security": {
       "title": "Security",
-      "description": "安全相关设置。",
+      "description": "Security-related settings.",
       "markdownDescription": "Security-related settings.\n\n- Category: `Security`\n- Requires restart: `yes`\n- Default: `{}`",
       "default": {},
       "type": "object",
       "properties": {
         "disableYoloMode": {
           "title": "Disable YOLO Mode",
-          "description": "即使通过参数启用了 YOLO 模式，也强制将其禁用。",
+          "description": "Disable YOLO mode, even if enabled by a flag.",
           "markdownDescription": "Disable YOLO mode, even if enabled by a flag.\n\n- Category: `Security`\n- Requires restart: `yes`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
         "blockGitExtensions": {
           "title": "Blocks extensions from Git",
-          "description": "阻止从 Git 安装和加载扩展。",
+          "description": "Blocks installing and loading extensions from Git.",
           "markdownDescription": "Blocks installing and loading extensions from Git.\n\n- Category: `Security`\n- Requires restart: `yes`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
         "folderTrust": {
           "title": "Folder Trust",
-          "description": "文件夹信任机制的设置。",
+          "description": "Settings for folder trust.",
           "markdownDescription": "Settings for folder trust.\n\n- Category: `Security`\n- Requires restart: `no`\n- Default: `{}`",
           "default": {},
           "type": "object",
           "properties": {
             "enabled": {
               "title": "Folder Trust",
-              "description": "用于记录文件夹信任是否开启。",
+              "description": "Setting to track whether Folder trust is enabled.",
               "markdownDescription": "Setting to track whether Folder trust is enabled.\n\n- Category: `Security`\n- Requires restart: `yes`\n- Default: `false`",
               "default": false,
               "type": "boolean"
@@ -1057,26 +1183,26 @@
         },
         "auth": {
           "title": "Authentication",
-          "description": "鉴权相关设置。",
+          "description": "Authentication settings.",
           "markdownDescription": "Authentication settings.\n\n- Category: `Security`\n- Requires restart: `yes`\n- Default: `{}`",
           "default": {},
           "type": "object",
           "properties": {
             "selectedType": {
               "title": "Selected Auth Type",
-              "description": "当前选中的认证方式。",
+              "description": "The currently selected authentication type.",
               "markdownDescription": "The currently selected authentication type.\n\n- Category: `Security`\n- Requires restart: `yes`",
               "type": "string"
             },
             "enforcedType": {
               "title": "Enforced Auth Type",
-              "description": "强制要求的认证类型，如与已选类型不一致则会提示重新认证。",
+              "description": "The required auth type. If this does not match the selected auth type, the user will be prompted to re-authenticate.",
               "markdownDescription": "The required auth type. If this does not match the selected auth type, the user will be prompted to re-authenticate.\n\n- Category: `Advanced`\n- Requires restart: `yes`",
               "type": "string"
             },
             "useExternal": {
               "title": "Use External Auth",
-              "description": "是否使用外部认证流程。",
+              "description": "Whether to use an external authentication flow.",
               "markdownDescription": "Whether to use an external authentication flow.\n\n- Category: `Security`\n- Requires restart: `yes`",
               "type": "boolean"
             }
@@ -1088,28 +1214,28 @@
     },
     "advanced": {
       "title": "Advanced",
-      "description": "面向高级用户的扩展设置。",
+      "description": "Advanced settings for power users.",
       "markdownDescription": "Advanced settings for power users.\n\n- Category: `Advanced`\n- Requires restart: `yes`\n- Default: `{}`",
       "default": {},
       "type": "object",
       "properties": {
         "autoConfigureMemory": {
           "title": "Auto Configure Max Old Space Size",
-          "description": "自动调整 Node.js 的内存限制。",
+          "description": "Automatically configure Node.js memory limits",
           "markdownDescription": "Automatically configure Node.js memory limits\n\n- Category: `Advanced`\n- Requires restart: `yes`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
         "dnsResolutionOrder": {
           "title": "DNS Resolution Order",
-          "description": "DNS 解析顺序。",
+          "description": "The DNS resolution order.",
           "markdownDescription": "The DNS resolution order.\n\n- Category: `Advanced`\n- Requires restart: `yes`",
           "type": "string"
         },
         "excludedEnvVars": {
           "title": "Excluded Project Environment Variables",
-          "description": "需要从项目上下文中排除的环境变量。",
-          "markdownDescription": "Environment variables to exclude from project context.\n\n- Category: `Advanced`\n- Requires restart: `no`\n- Default: `[\"DEBUG\",\"DEBUG_MODE\"]`",
+          "description": "Environment variables to exclude from project context.",
+          "markdownDescription": "Environment variables to exclude from project context.\n\n- Category: `Advanced`\n- Requires restart: `no`\n- Default: `[\n  \"DEBUG\",\n  \"DEBUG_MODE\"\n]`",
           "default": ["DEBUG", "DEBUG_MODE"],
           "type": "array",
           "items": {
@@ -1118,7 +1244,7 @@
         },
         "bugCommand": {
           "title": "Bug Command",
-          "description": "缺陷上报命令的配置。",
+          "description": "Configuration for the bug report command.",
           "markdownDescription": "Configuration for the bug report command.\n\n- Category: `Advanced`\n- Requires restart: `no`",
           "$ref": "#/$defs/BugCommandSettings"
         }
@@ -1127,70 +1253,70 @@
     },
     "experimental": {
       "title": "Experimental",
-      "description": "用于开启实验性功能的设置。",
+      "description": "Setting to enable experimental features",
       "markdownDescription": "Setting to enable experimental features\n\n- Category: `Experimental`\n- Requires restart: `yes`\n- Default: `{}`",
       "default": {},
       "type": "object",
       "properties": {
         "extensionManagement": {
           "title": "Extension Management",
-          "description": "是否启用扩展管理能力。",
+          "description": "Enable extension management features.",
           "markdownDescription": "Enable extension management features.\n\n- Category: `Experimental`\n- Requires restart: `yes`\n- Default: `true`",
           "default": true,
           "type": "boolean"
         },
         "extensionReloading": {
           "title": "Extension Reloading",
-          "description": "允许在 CLI 会话内加载或卸载扩展。",
+          "description": "Enables extension loading/unloading within the CLI session.",
           "markdownDescription": "Enables extension loading/unloading within the CLI session.\n\n- Category: `Experimental`\n- Requires restart: `yes`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
         "isModelAvailabilityServiceEnabled": {
           "title": "Enable Model Availability Service",
-          "description": "启用新的模型可用性服务进行模型路由。",
+          "description": "Enable model routing using new availability service.",
           "markdownDescription": "Enable model routing using new availability service.\n\n- Category: `Experimental`\n- Requires restart: `yes`\n- Default: `false`",
           "default": false,
           "type": "boolean"
         },
         "codebaseInvestigatorSettings": {
           "title": "Codebase Investigator Settings",
-          "description": "Codebase Investigator 代理的配置。",
+          "description": "Configuration for Codebase Investigator.",
           "markdownDescription": "Configuration for Codebase Investigator.\n\n- Category: `Experimental`\n- Requires restart: `yes`\n- Default: `{}`",
           "default": {},
           "type": "object",
           "properties": {
             "enabled": {
               "title": "Enable Codebase Investigator",
-              "description": "是否启用 Codebase Investigator 代理。",
+              "description": "Enable the Codebase Investigator agent.",
               "markdownDescription": "Enable the Codebase Investigator agent.\n\n- Category: `Experimental`\n- Requires restart: `yes`\n- Default: `true`",
               "default": true,
               "type": "boolean"
             },
             "maxNumTurns": {
               "title": "Codebase Investigator Max Num Turns",
-              "description": "Codebase Investigator 允许的最大对话轮数。",
+              "description": "Maximum number of turns for the Codebase Investigator agent.",
               "markdownDescription": "Maximum number of turns for the Codebase Investigator agent.\n\n- Category: `Experimental`\n- Requires restart: `yes`\n- Default: `10`",
               "default": 10,
               "type": "number"
             },
             "maxTimeMinutes": {
               "title": "Max Time (Minutes)",
-              "description": "Codebase Investigator 可运行的最长时长（分钟）。",
+              "description": "Maximum time for the Codebase Investigator agent (in minutes).",
               "markdownDescription": "Maximum time for the Codebase Investigator agent (in minutes).\n\n- Category: `Experimental`\n- Requires restart: `yes`\n- Default: `3`",
               "default": 3,
               "type": "number"
             },
             "thinkingBudget": {
               "title": "Thinking Budget",
-              "description": "Codebase Investigator 的思考预算。",
+              "description": "The thinking budget for the Codebase Investigator agent.",
               "markdownDescription": "The thinking budget for the Codebase Investigator agent.\n\n- Category: `Experimental`\n- Requires restart: `yes`\n- Default: `8192`",
               "default": 8192,
               "type": "number"
             },
             "model": {
               "title": "Model",
-              "description": "Codebase Investigator 使用的模型。",
+              "description": "The model to use for the Codebase Investigator agent.",
               "markdownDescription": "The model to use for the Codebase Investigator agent.\n\n- Category: `Experimental`\n- Requires restart: `yes`\n- Default: `gemini-2.5-pro`",
               "default": "gemini-2.5-pro",
               "type": "string"
@@ -1203,14 +1329,14 @@
     },
     "extensions": {
       "title": "Extensions",
-      "description": "扩展功能的设置。",
+      "description": "Settings for extensions.",
       "markdownDescription": "Settings for extensions.\n\n- Category: `Extensions`\n- Requires restart: `yes`\n- Default: `{}`",
       "default": {},
       "type": "object",
       "properties": {
         "disabled": {
           "title": "Disabled Extensions",
-          "description": "被禁用的扩展列表。",
+          "description": "List of disabled extensions.",
           "markdownDescription": "List of disabled extensions.\n\n- Category: `Extensions`\n- Requires restart: `yes`\n- Default: `[]`",
           "default": [],
           "type": "array",
@@ -1220,7 +1346,7 @@
         },
         "workspacesWithMigrationNudge": {
           "title": "Workspaces with Migration Nudge",
-          "description": "已经显示迁移提示的工作区列表。",
+          "description": "List of workspaces for which the migration nudge has been shown.",
           "markdownDescription": "List of workspaces for which the migration nudge has been shown.\n\n- Category: `Extensions`\n- Requires restart: `no`\n- Default: `[]`",
           "default": [],
           "type": "array",
@@ -1233,7 +1359,7 @@
     },
     "hooks": {
       "title": "Hooks",
-      "description": "用于拦截并自定义代理行为的钩子配置。",
+      "description": "Hook configurations for intercepting and customizing agent behavior.",
       "markdownDescription": "Hook configurations for intercepting and customizing agent behavior.\n\n- Category: `Advanced`\n- Requires restart: `no`\n- Default: `{}`",
       "default": {},
       "type": "object",
@@ -1243,165 +1369,169 @@
   "$defs": {
     "MCPServerConfig": {
       "type": "object",
-      "description": "MCP 服务器配置的定义。",
+      "description": "Definition of a Model Context Protocol (MCP) server configuration.",
       "additionalProperties": false,
       "properties": {
         "command": {
           "type": "string",
-          "description": "用于 stdio 传输的可执行命令。"
+          "description": "Executable invoked for stdio transport."
         },
         "args": {
           "type": "array",
-          "description": "该 stdio 命令需要的参数列表。",
+          "description": "Command-line arguments for the stdio transport command.",
           "items": {
             "type": "string"
           }
         },
         "env": {
           "type": "object",
-          "description": "为服务器进程设置的环境变量。",
+          "description": "Environment variables to set for the server process.",
           "additionalProperties": {
             "type": "string"
           }
         },
         "cwd": {
           "type": "string",
-          "description": "服务器进程的工作目录。"
+          "description": "Working directory for the server process."
         },
         "url": {
           "type": "string",
-          "description": "SSE 传输使用的 URL。"
+          "description": "SSE transport URL."
         },
         "httpUrl": {
           "type": "string",
-          "description": "流式 HTTP 传输 URL。"
+          "description": "Streaming HTTP transport URL."
         },
         "headers": {
           "type": "object",
-          "description": "发送给服务器的额外 HTTP 头。",
+          "description": "Additional HTTP headers sent to the server.",
           "additionalProperties": {
             "type": "string"
           }
         },
         "tcp": {
           "type": "string",
-          "description": "WebSocket 传输所用的 TCP 地址。"
+          "description": "TCP address for websocket transport."
         },
         "timeout": {
           "type": "number",
-          "description": "MCP 请求的超时（毫秒）。"
+          "description": "Timeout in milliseconds for MCP requests."
         },
         "trust": {
           "type": "boolean",
-          "description": "标记该服务器为可信，可信服务器可获得额外能力。"
+          "description": "Marks the server as trusted. Trusted servers may gain additional capabilities."
         },
         "description": {
           "type": "string",
-          "description": "对服务器的人类可读描述。"
+          "description": "Human-readable description of the server."
         },
         "includeTools": {
           "type": "array",
-          "description": "对该服务器启用的工具子集，留空则启用全部工具。",
+          "description": "Subset of tools that should be enabled for this server. When omitted all tools are enabled.",
           "items": {
             "type": "string"
           }
         },
         "excludeTools": {
           "type": "array",
-          "description": "即使暴露也要在此服务器禁用的工具列表。",
+          "description": "Tools that should be disabled for this server even if exposed.",
           "items": {
             "type": "string"
           }
         },
         "extension": {
           "type": "object",
-          "description": "描述拥有此 MCP 服务器的 Gemini CLI 扩展的元数据。",
+          "description": "Metadata describing the Gemini CLI extension that owns this MCP server.",
           "additionalProperties": {
             "type": ["string", "boolean", "number"]
           }
         },
         "oauth": {
           "type": "object",
-          "description": "与服务器通信所需的 OAuth 配置。",
+          "description": "OAuth configuration for authenticating with the server.",
           "additionalProperties": true
         },
         "authProviderType": {
           "type": "string",
-          "description": "用于获取凭证的认证提供方（例如 `dynamic_discovery`）。",
+          "description": "Authentication provider used for acquiring credentials (for example `dynamic_discovery`).",
           "enum": ["dynamic_discovery", "google_credentials", "service_account_impersonation"]
         },
         "targetAudience": {
           "type": "string",
-          "description": "OAuth 目标受众（如 CLIENT_ID.apps.googleusercontent.com）。"
+          "description": "OAuth target audience (CLIENT_ID.apps.googleusercontent.com)."
         },
         "targetServiceAccount": {
           "type": "string",
-          "description": "需要模拟的服务账号邮箱（如 name@project.iam.gserviceaccount.com）。"
+          "description": "Service account email to impersonate (name@project.iam.gserviceaccount.com)."
+        },
+        "useInstructions": {
+          "type": "boolean",
+          "description": "If true, instructions from this server will be included in the system prompt."
         }
       }
     },
     "TelemetrySettings": {
       "type": "object",
-      "description": "Gemini CLI 的遥测配置。",
+      "description": "Telemetry configuration for Gemini CLI.",
       "additionalProperties": false,
       "properties": {
         "enabled": {
           "type": "boolean",
-          "description": "是否启用遥测上报。"
+          "description": "Enables telemetry emission."
         },
         "target": {
           "type": "string",
-          "description": "遥测输出目标（例如 `stderr`、`stdout` 或 `otlp`）。"
+          "description": "Telemetry destination (for example `stderr`, `stdout`, or `otlp`)."
         },
         "otlpEndpoint": {
           "type": "string",
-          "description": "OTLP 导出器使用的端点。"
+          "description": "Endpoint for OTLP exporters."
         },
         "otlpProtocol": {
           "type": "string",
-          "description": "OTLP 导出的协议。",
+          "description": "Protocol for OTLP exporters.",
           "enum": ["grpc", "http"]
         },
         "logPrompts": {
           "type": "boolean",
-          "description": "是否在遥测数据中记录提示词。"
+          "description": "Whether prompts are logged in telemetry payloads."
         },
         "outfile": {
           "type": "string",
-          "description": "写入遥测输出的文件路径。"
+          "description": "File path for writing telemetry output."
         },
         "useCollector": {
           "type": "boolean",
-          "description": "是否把遥测数据转发至 OTLP collector。"
+          "description": "Whether to forward telemetry to an OTLP collector."
         }
       }
     },
     "BugCommandSettings": {
       "type": "object",
-      "description": "缺陷上报辅助命令的配置。",
+      "description": "Configuration for the bug report helper command.",
       "additionalProperties": false,
       "properties": {
         "urlTemplate": {
           "type": "string",
-          "description": "打开缺陷报告链接的模板，变量会在运行时填充。"
+          "description": "Template used to open a bug report URL. Variables in the template are populated at runtime."
         }
       },
       "required": ["urlTemplate"]
     },
     "SummarizeToolOutputSettings": {
       "type": "object",
-      "description": "控制各工具的摘要行为，所有属性均为可选。",
+      "description": "Controls summarization behavior for individual tools. All properties are optional.",
       "additionalProperties": false,
       "properties": {
         "tokenBudget": {
           "type": "number",
-          "description": "摘要工具输出时可使用的最大 token 数。"
+          "description": "Maximum number of tokens used when summarizing tool output."
         }
       }
     },
     "CustomTheme": {
       "type": "object",
-      "description": "用于自定义 Gemini CLI 输出样式的主题定义，颜色可用十六进制或 ANSI 名称。",
+      "description": "Custom theme definition used for styling Gemini CLI output. Colors are provided as hex strings or named ANSI colors.",
       "additionalProperties": false,
       "properties": {
         "type": {
@@ -1411,7 +1541,7 @@
         },
         "name": {
           "type": "string",
-          "description": "主题显示名称。"
+          "description": "Theme display name."
         },
         "text": {
           "type": "object",
@@ -1549,7 +1679,7 @@
       "required": ["type", "name"]
     },
     "StringOrStringArray": {
-      "description": "可接受单个字符串或字符串数组。",
+      "description": "Accepts either a single string or an array of strings.",
       "anyOf": [
         {
           "type": "string"
@@ -1563,7 +1693,7 @@
       ]
     },
     "BooleanOrString": {
-      "description": "可接受布尔值或命令名称字符串。",
+      "description": "Accepts either a boolean flag or a string command name.",
       "anyOf": [
         {
           "type": "boolean"

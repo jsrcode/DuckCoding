@@ -1,30 +1,25 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://schema.duckcoding.com/codex-config.json",
   "description": "Codex CLI 的 config.toml 配置结构（翻译自官方文档），用于前端渲染与校验。",
   "type": "object",
   "additionalProperties": true,
   "$defs": {
     "featureFlags": {
       "type": "object",
-      "description": "可选实验特性的布尔开关表。",
+      "description": "可选/实验特性的布尔开关表，对应 [features]。",
       "additionalProperties": false,
       "properties": {
         "unified_exec": {
           "type": "boolean",
-          "description": "启用统一的 PTY exec 工具。"
-        },
-        "streamable_shell": {
-          "type": "boolean",
-          "description": "启用可流式的 exec/write-stdin 工具。"
+          "description": "使用统一的 PTY exec 工具。"
         },
         "rmcp_client": {
           "type": "boolean",
-          "description": "允许 streamable HTTP MCP 使用 OAuth。"
+          "description": "启用 RMCP（HTTP MCP + OAuth）功能。"
         },
         "apply_patch_freeform": {
           "type": "boolean",
-          "description": "暴露自由格式的 apply_patch 工具。"
+          "description": "包含自由格式的 apply_patch 工具。"
         },
         "view_image_tool": {
           "type": "boolean",
@@ -34,17 +29,33 @@
           "type": "boolean",
           "description": "允许模型请求 Web 搜索。"
         },
+        "exec_policy": {
+          "type": "boolean",
+          "description": "启用 exec 执行策略/风险评估（shell/unified exec 前置校验）。"
+        },
         "experimental_sandbox_command_assessment": {
           "type": "boolean",
-          "description": "启用模型对 sandbox 风险的评估。"
-        },
-        "ghost_commit": {
-          "type": "boolean",
-          "description": "每轮创建一次 ghost commit。"
+          "description": "启用模型对 sandbox 命令风险的评估。"
         },
         "enable_experimental_windows_sandbox": {
           "type": "boolean",
           "description": "启用 Windows 受限令牌 sandbox。"
+        },
+        "remote_compaction": {
+          "type": "boolean",
+          "description": "允许远程（服务端）对话压缩，用于 ChatGPT 登录场景。"
+        },
+        "shell_tool": {
+          "type": "boolean",
+          "description": "启用默认 shell 工具。"
+        },
+        "parallel": {
+          "type": "boolean",
+          "description": "允许模型并行调用多个工具（需模型支持）。"
+        },
+        "undo": {
+          "type": "boolean",
+          "description": "每轮创建可撤销的 ghost commit（undo）。"
         }
       }
     },
@@ -83,6 +94,10 @@
           "type": "boolean",
           "description": "允许 Codex 主动发起内置 Web 搜索。"
         },
+        "web_search_request": {
+          "type": "boolean",
+          "description": "同 web_search，别名写法。"
+        },
         "view_image": {
           "type": "boolean",
           "description": "允许发送截图/图片作为上下文。"
@@ -101,7 +116,7 @@
         },
         "ignore_default_excludes": {
           "type": "boolean",
-          "description": "为 true 时跳过 KEY/SECRET/TOKEN 的默认过滤。"
+          "description": "为 true 时跳过默认过滤（名称含 KEY/TOKEN 的变量）。"
         },
         "exclude": {
           "type": "array",
@@ -181,7 +196,7 @@
         },
         "env_http_headers": {
           "type": "object",
-          "description": "从环境变量注入的 HTTP 头。",
+          "description": "从环境变量注入的 HTTP 头，值应为环境变量名。",
           "additionalProperties": {
             "type": "string"
           }
@@ -193,6 +208,10 @@
         "startup_timeout_sec": {
           "type": "number",
           "description": "启动超时时间（秒）。"
+        },
+        "startup_timeout_ms": {
+          "type": "integer",
+          "description": "启动超时时间（毫秒，startup_timeout_sec 的别名）。"
         },
         "tool_timeout_sec": {
           "type": "number",
@@ -224,15 +243,10 @@
           "enum": ["save-all", "none"],
           "description": "历史保存策略：save-all 表示全部记录，none 表示禁用持久化。"
         },
-        "file_opener": {
-          "type": "string",
-          "enum": ["vscode", "vscode-insiders", "windsurf", "cursor", "none"],
-          "description": "用于点击引用时打开文件的 URI scheme。"
-        },
         "max_bytes": {
-          "type": "number",
+          "type": "integer",
           "minimum": 0,
-          "description": "历史文件允许的最大字节数（0 表示使用内置默认限制）。"
+          "description": "历史文件允许的最大字节数（0/未设置使用内置默认；当前未强制执行）。"
         }
       }
     },
@@ -255,28 +269,9 @@
             }
           ]
         },
-        "hide_agent_reasoning": {
+        "animations": {
           "type": "boolean",
-          "description": "是否隐藏内部 reasoning 输出。"
-        },
-        "show_raw_agent_reasoning": {
-          "type": "boolean",
-          "description": "是否展示原始 reasoning 内容。"
-        },
-        "disable_paste_burst": {
-          "type": "boolean",
-          "description": "禁用 TUI 内的大段粘贴保护。"
-        },
-        "windows_wsl_setup_acknowledged": {
-          "type": "boolean",
-          "description": "标记 Windows/WSL 引导提示已确认。"
-        },
-        "notify": {
-          "type": "array",
-          "description": "外部通知程序命令（argv 数组），为空表示禁用。",
-          "items": {
-            "type": "string"
-          }
+          "description": "启用/禁用欢迎页、闪烁等 TUI 动画。"
         }
       }
     },
@@ -294,6 +289,25 @@
           "description": "该 profile 对应的模型提供方。",
           "x-key-source": "model_providers"
         },
+        "model_reasoning_effort": {
+          "type": "string",
+          "enum": ["minimal", "low", "medium", "high"],
+          "description": "Responses API 的 reasoning effort 级别。"
+        },
+        "model_reasoning_summary": {
+          "type": "string",
+          "enum": ["auto", "concise", "detailed", "none"],
+          "description": "生成 reasoning summary 的粒度/开关。"
+        },
+        "model_verbosity": {
+          "type": "string",
+          "enum": ["low", "medium", "high"],
+          "description": "Responses API 文本输出详略程度。"
+        },
+        "chatgpt_base_url": {
+          "type": "string",
+          "description": "ChatGPT 登录/请求使用的 base URL。"
+        },
         "approval_policy": {
           "type": "string",
           "enum": ["untrusted", "on-failure", "on-request", "never"],
@@ -303,6 +317,49 @@
           "type": "string",
           "enum": ["read-only", "workspace-write", "danger-full-access"],
           "description": "该 profile 的 sandbox 模式。"
+        },
+        "experimental_instructions_file": {
+          "type": "string",
+          "description": "基础指令文件（实验/兼容字段）。"
+        },
+        "experimental_compact_prompt_file": {
+          "type": "string",
+          "description": "历史压缩提示文件（实验/兼容字段）。"
+        },
+        "include_apply_patch_tool": {
+          "type": "boolean",
+          "description": "遗留开关：启用 apply_patch 工具。"
+        },
+        "experimental_use_unified_exec_tool": {
+          "type": "boolean",
+          "description": "遗留开关：启用统一 exec 工具。"
+        },
+        "experimental_use_rmcp_client": {
+          "type": "boolean",
+          "description": "遗留开关：启用实验 RMCP 客户端。"
+        },
+        "experimental_use_freeform_apply_patch": {
+          "type": "boolean",
+          "description": "遗留开关：启用自由格式 apply_patch。"
+        },
+        "experimental_sandbox_command_assessment": {
+          "type": "boolean",
+          "description": "遗留开关：模型评估 sandbox 命令风险。"
+        },
+        "tools_web_search": {
+          "type": "boolean",
+          "description": "遗留开关：允许 web_search 工具。"
+        },
+        "tools_view_image": {
+          "type": "boolean",
+          "description": "遗留开关：允许 view_image 工具。"
+        },
+        "features": {
+          "$ref": "#/$defs/featureFlags"
+        },
+        "oss_provider": {
+          "type": "string",
+          "description": "本地 OSS 提供方（如 lmstudio、ollama）。"
         }
       }
     },
@@ -314,6 +371,22 @@
         "hide_full_access_warning": {
           "type": "boolean",
           "description": "隐藏 danger-full-access 模式下的风险警告。"
+        },
+        "hide_world_writable_warning": {
+          "type": "boolean",
+          "description": "隐藏世界可写目录的风险提示。"
+        },
+        "hide_rate_limit_model_nudge": {
+          "type": "boolean",
+          "description": "隐藏速率限制模型切换提醒。"
+        },
+        "hide_gpt5_1_migration_prompt": {
+          "type": "boolean",
+          "description": "隐藏 GPT-5.1 迁移提示。"
+        },
+        "hide_gpt-5.1-codex-max_migration_prompt": {
+          "type": "boolean",
+          "description": "隐藏 gpt-5.1-codex-max 迁移提示。"
         }
       }
     },
@@ -324,8 +397,8 @@
       "properties": {
         "trust_level": {
           "type": "string",
-          "enum": ["trusted"],
-          "description": "信任级别，当前仅支持 trusted。"
+          "enum": ["trusted", "untrusted"],
+          "description": "信任级别：trusted / untrusted。"
         }
       }
     },
@@ -383,16 +456,19 @@
       "x-key-source": "model_providers"
     },
     "model_context_window": {
-      "type": "number",
+      "type": "integer",
+      "minimum": 0,
       "description": "模型上下文窗口大小（token）。"
     },
-    "model_max_output_tokens": {
-      "type": "number",
-      "description": "模型最大输出 token 数。"
-    },
     "model_auto_compact_token_limit": {
-      "type": "number",
+      "type": "integer",
+      "minimum": 0,
       "description": "自动触发对话压缩的 token 阈值，0 表示禁用。"
+    },
+    "tool_output_token_limit": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "存储单次工具/函数输出的 token 上限。"
     },
     "model_reasoning_effort": {
       "type": "string",
@@ -408,6 +484,14 @@
       "type": "string",
       "enum": ["low", "medium", "high"],
       "description": "Responses API 中文本输出的详略程度。"
+    },
+    "hide_agent_reasoning": {
+      "type": "boolean",
+      "description": "隐藏 AgentReasoning 事件（减少中间思考输出）。"
+    },
+    "show_raw_agent_reasoning": {
+      "type": "boolean",
+      "description": "显示原始 reasoning 内容。"
     },
     "model_supports_reasoning_summaries": {
       "type": "boolean",
@@ -463,9 +547,10 @@
     "history": {
       "$ref": "#/$defs/historySettings"
     },
-    "hide_full_access_warning": {
-      "type": "boolean",
-      "description": "已废弃，请改用 [notice].hide_full_access_warning。"
+    "file_opener": {
+      "type": "string",
+      "enum": ["vscode", "vscode-insiders", "windsurf", "cursor", "none"],
+      "description": "用于点击引用时打开文件的 URI scheme。"
     },
     "notice": {
       "$ref": "#/$defs/noticeSettings"
@@ -489,7 +574,8 @@
       "description": "强制登录方式，覆盖自动判断。"
     },
     "project_doc_max_bytes": {
-      "type": "number",
+      "type": "integer",
+      "minimum": 0,
       "description": "AGENTS.md 读取的最大字节数。"
     },
     "project_doc_fallback_filenames": {
@@ -498,6 +584,18 @@
       "items": {
         "type": "string"
       }
+    },
+    "check_for_update_on_startup": {
+      "type": "boolean",
+      "description": "启动时检查 Codex 更新（默认 true，可在集中管理时关闭提示）。"
+    },
+    "disable_paste_burst": {
+      "type": "boolean",
+      "description": "禁用粘贴突发保护；输入不再缓冲/合并。"
+    },
+    "windows_wsl_setup_acknowledged": {
+      "type": "boolean",
+      "description": "标记 Windows/WSL 引导提示已确认。"
     },
     "experimental_use_unified_exec_tool": {
       "type": "boolean",
@@ -529,7 +627,7 @@
     },
     "notify": {
       "type": "array",
-      "description": "Legacy 位置的外部通知命令（建议改用 [tui].notify）。",
+      "description": "外部通知程序命令（argv 数组）；为空表示禁用。",
       "items": {
         "type": "string"
       }
@@ -556,6 +654,10 @@
         "type": "object",
         "additionalProperties": true
       }
+    },
+    "oss_provider": {
+      "type": "string",
+      "description": "首选本地模型提供方（如 lmstudio、ollama）。"
     },
     "projects": {
       "type": "object",

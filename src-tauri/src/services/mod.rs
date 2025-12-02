@@ -8,6 +8,9 @@
 // - session: 会话管理（透明代理请求追踪）
 
 pub mod config;
+pub mod config_watcher;
+pub mod migration;
+pub mod profile_store;
 pub mod proxy;
 pub mod session;
 pub mod tool;
@@ -15,6 +18,9 @@ pub mod update;
 
 // 重新导出服务
 pub use config::*;
+pub use config_watcher::*;
+pub use migration::*;
+pub use profile_store::*;
 pub use proxy::*;
 // session 模块：明确导出避免 db 名称冲突
 pub use session::{manager::SESSION_MANAGER, models::*};

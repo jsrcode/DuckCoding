@@ -63,6 +63,9 @@ export interface GlobalConfig {
   hide_session_config_hint?: boolean;
   // 日志系统配置
   log_config?: LogConfig;
+  // 配置监听
+  external_watch_enabled?: boolean;
+  external_poll_interval_ms?: number;
 }
 
 export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error';
@@ -174,6 +177,52 @@ export interface GeminiSettingsPayload {
   env: GeminiEnvConfig;
 }
 
+export interface ProfileDescriptor {
+  tool_id: string;
+  name: string;
+  format: string;
+  path: string;
+  updated_at?: string;
+  created_at?: string;
+  source?: string;
+  checksum?: string;
+  tags?: string[];
+}
+
+export interface ExternalConfigChange {
+  tool_id: string;
+  path: string;
+  checksum?: string;
+  detected_at: string;
+  dirty: boolean;
+  timestamp?: string;
+  fallback_poll?: boolean;
+}
+
+export interface MigrationRecord {
+  tool_id: string;
+  profile_name: string;
+  from_path: string;
+  to_path: string;
+  succeeded: boolean;
+  message?: string | null;
+  timestamp: string;
+}
+
+export interface LegacyCleanupResult {
+  tool_id: string;
+  removed: string[];
+  failed: [string, string][];
+}
+
+export interface ImportExternalChangeResult {
+  profileName: string;
+  wasNew: boolean;
+  replaced: boolean;
+  beforeChecksum?: string | null;
+  checksum?: string | null;
+}
+
 export async function checkInstallations(): Promise<ToolStatus[]> {
   return await invoke<ToolStatus[]>('check_installations');
 }
@@ -230,6 +279,38 @@ export async function listProfiles(tool: string): Promise<string[]> {
   return await invoke<string[]>('list_profiles', { tool });
 }
 
+export async function listProfileDescriptors(tool?: string): Promise<ProfileDescriptor[]> {
+  return await invoke<ProfileDescriptor[]>('list_profile_descriptors', { tool });
+}
+
+export async function getExternalChanges(): Promise<ExternalConfigChange[]> {
+  return await invoke<ExternalConfigChange[]>('get_external_changes');
+}
+
+export async function ackExternalChange(tool: string): Promise<void> {
+  return await invoke<void>('ack_external_change', { tool });
+}
+
+export async function getMigrationReport(): Promise<MigrationRecord[]> {
+  return await invoke<MigrationRecord[]>('get_migration_report');
+}
+
+export async function cleanLegacyBackups(): Promise<LegacyCleanupResult[]> {
+  return await invoke<LegacyCleanupResult[]>('clean_legacy_backups');
+}
+
+export async function importNativeChange(
+  tool: string,
+  profile: string,
+  asNew: boolean,
+): Promise<ImportExternalChangeResult> {
+  return await invoke<ImportExternalChangeResult>('import_native_change', {
+    tool,
+    profile,
+    asNew,
+  });
+}
+
 export async function switchProfile(tool: string, profile: string): Promise<void> {
   return await invoke<void>('switch_profile', { tool, profile });
 }
@@ -261,6 +342,29 @@ export async function getGlobalConfig(): Promise<GlobalConfig | null> {
 
 export async function getCurrentProxy(): Promise<string | null> {
   return await invoke<string | null>('get_current_proxy');
+}
+
+// 配置监听控制
+export async function getWatcherStatus(): Promise<boolean> {
+  return await invoke<boolean>('get_watcher_status');
+}
+
+export async function startWatcherIfNeeded(): Promise<boolean> {
+  return await invoke<boolean>('start_watcher_if_needed');
+}
+
+export async function stopWatcher(): Promise<boolean> {
+  return await invoke<boolean>('stop_watcher');
+}
+
+export async function saveWatcherSettings(
+  enabled: boolean,
+  pollIntervalMs?: number,
+): Promise<void> {
+  await invoke<void>('save_watcher_settings', {
+    enabled,
+    pollIntervalMs,
+  });
 }
 
 export async function applyProxyNow(): Promise<string | null> {
@@ -320,18 +424,41 @@ export async function applyCloseAction(action: CloseAction): Promise<void> {
   return await invoke<void>('handle_close_action', { action });
 }
 
-export async function getClaudeSettings(): Promise<JsonObject> {
+export interface ClaudeSettingsPayload {
+  settings: JsonObject;
+  extraConfig?: JsonObject | null;
+}
+
+export async function getClaudeSettings(): Promise<ClaudeSettingsPayload> {
   const data = await invoke<JsonValue>('get_claude_settings');
 
   if (data && typeof data === 'object' && !Array.isArray(data)) {
-    return data as JsonObject;
+    const payload = data as Record<string, unknown>;
+    const settings =
+      payload.settings && typeof payload.settings === 'object' && !Array.isArray(payload.settings)
+        ? (payload.settings as JsonObject)
+        : {};
+    const extraConfig =
+      payload.extraConfig &&
+      typeof payload.extraConfig === 'object' &&
+      !Array.isArray(payload.extraConfig)
+        ? (payload.extraConfig as JsonObject)
+        : null;
+    return { settings, extraConfig };
   }
 
-  return {};
+  return { settings: {}, extraConfig: null };
 }
 
-export async function saveClaudeSettings(settings: JsonObject): Promise<void> {
-  return await invoke<void>('save_claude_settings', { settings });
+export async function saveClaudeSettings(
+  settings: JsonObject,
+  extraConfig?: JsonObject | null,
+): Promise<void> {
+  const payload: Record<string, unknown> = { settings };
+  if (extraConfig !== undefined) {
+    payload.extraConfig = extraConfig;
+  }
+  return await invoke<void>('save_claude_settings', payload);
 }
 
 export async function getClaudeSchema(): Promise<JsonSchema> {

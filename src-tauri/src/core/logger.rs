@@ -212,10 +212,13 @@ fn get_log_dir(file_path: Option<&str>) -> anyhow::Result<std::path::PathBuf> {
 /// 仅限调整日志级别，格式和输出目标的变更仍需要重启应用。
 ///
 /// # 示例
-/// ```
-/// use duckcoding::models::config::LogLevel;
-/// use duckcoding::core::update_log_level;
+/// ```no_run
+/// use duckcoding::core::{init_logger, update_log_level};
+/// use duckcoding::models::config::{LogConfig, LogLevel};
 ///
+/// // 先初始化日志系统
+/// init_logger(&LogConfig::default()).expect("初始化日志系统失败");
+/// // 再热更新日志级别
 /// update_log_level(LogLevel::Debug).expect("更新日志级别失败");
 /// ```
 pub fn update_log_level(new_level: LogLevel) -> anyhow::Result<()> {

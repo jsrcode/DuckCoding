@@ -17,12 +17,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Loader2, Save, Sparkles } from 'lucide-react';
-import { logoMap } from '@/utils/constants';
-import type { ToolStatus } from '@/lib/tauri-commands';
 
 interface ApiConfigFormProps {
   selectedTool: string;
-  setSelectedTool: (tool: string) => void;
   provider: string;
   setProvider: (provider: string) => void;
   apiKey: string;
@@ -31,7 +28,6 @@ interface ApiConfigFormProps {
   setBaseUrl: (url: string) => void;
   profileName: string;
   setProfileName: (name: string) => void;
-  installedTools: ToolStatus[];
   configuring: boolean;
   generatingKey: boolean;
   onGenerateKey: () => void;
@@ -41,7 +37,6 @@ interface ApiConfigFormProps {
 
 export function ApiConfigForm({
   selectedTool,
-  setSelectedTool,
   provider,
   setProvider,
   apiKey,
@@ -50,7 +45,6 @@ export function ApiConfigForm({
   setBaseUrl,
   profileName,
   setProfileName,
-  installedTools,
   configuring,
   generatingKey,
   onGenerateKey,
@@ -61,29 +55,10 @@ export function ApiConfigForm({
     <Card className="shadow-sm border">
       <CardHeader>
         <CardTitle>API 配置</CardTitle>
-        <CardDescription>为已安装的工具配置 API 密钥</CardDescription>
+        <CardDescription>为当前工具配置 API 密钥</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="tool-select">选择工具 *</Label>
-            <Select value={selectedTool} onValueChange={setSelectedTool}>
-              <SelectTrigger id="tool-select" className="shadow-sm">
-                <SelectValue placeholder="选择要配置的工具" />
-              </SelectTrigger>
-              <SelectContent>
-                {installedTools.map((tool) => (
-                  <SelectItem key={tool.id} value={tool.id}>
-                    <div className="flex items-center gap-2">
-                      <img src={logoMap[tool.id]} className="w-4 h-4" />
-                      {tool.name}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           <div className="space-y-2">
             <Label htmlFor="provider-select">API 提供商 *</Label>
             <Select value={provider} onValueChange={setProvider}>

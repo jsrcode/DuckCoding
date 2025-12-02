@@ -1,5 +1,6 @@
 // 透明代理配置管理服务
 use crate::models::{GlobalConfig, Tool, ToolProxyConfig};
+use crate::services::profile_store::{load_profile_payload, ProfilePayload};
 use anyhow::{Context, Result};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -553,40 +554,13 @@ impl TransparentProxyConfigService {
             anyhow::bail!("从备份读取配置目前仅支持 Claude Code");
         }
 
-        let backup_path = tool.backup_path(profile_name);
-
-        if !backup_path.exists() {
-            anyhow::bail!("备份配置文件不存在: {backup_path:?}");
+        let payload =
+            load_profile_payload(&tool.id, profile_name).context("读取集中存储的配置失败")?;
+        match payload {
+            ProfilePayload::Claude {
+                api_key, base_url, ..
+            } => Ok((api_key, base_url)),
+            _ => anyhow::bail!("配置内容与工具不匹配: {}", tool.id),
         }
-
-        let content = fs::read_to_string(&backup_path).context("读取备份配置失败")?;
-        let backup_data: Value = serde_json::from_str(&content).context("解析备份配置失败")?;
-
-        // 兼容新旧格式
-        let api_key = backup_data
-            .get("ANTHROPIC_AUTH_TOKEN")
-            .and_then(|v| v.as_str())
-            .or_else(|| {
-                backup_data
-                    .get("env")
-                    .and_then(|env| env.get("ANTHROPIC_AUTH_TOKEN"))
-                    .and_then(|v| v.as_str())
-            })
-            .ok_or_else(|| anyhow::anyhow!("备份配置中未找到 API Key"))?
-            .to_string();
-
-        let base_url = backup_data
-            .get("ANTHROPIC_BASE_URL")
-            .and_then(|v| v.as_str())
-            .or_else(|| {
-                backup_data
-                    .get("env")
-                    .and_then(|env| env.get("ANTHROPIC_BASE_URL"))
-                    .and_then(|v| v.as_str())
-            })
-            .ok_or_else(|| anyhow::anyhow!("备份配置中未找到 Base URL"))?
-            .to_string();
-
-        Ok((api_key, base_url))
     }
 }

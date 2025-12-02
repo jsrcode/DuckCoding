@@ -37,11 +37,10 @@ export function useConfigManagement(tools: ToolStatus[]) {
 
   // 当工具加载完成后，设置默认选中的工具并加载配置
   useEffect(() => {
-    const installedTools = tools.filter((t) => t.installed);
-    if (!selectedTool && installedTools.length > 0) {
-      setSelectedTool(installedTools[0].id);
+    if (!selectedTool && tools.length > 0) {
+      setSelectedTool(tools[0].id);
     }
-    if (installedTools.length > 0) {
+    if (tools.length > 0) {
       loadAllProfiles();
     }
     // 移除 loadAllProfiles 依赖，避免循环依赖

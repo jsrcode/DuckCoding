@@ -29,6 +29,8 @@ fn create_minimal_config() -> GlobalConfig {
         hide_session_config_hint: false,
         log_config: LogConfig::default(),
         onboarding_status: None,
+        external_watch_enabled: true,
+        external_poll_interval_ms: 5000,
     }
 }
 

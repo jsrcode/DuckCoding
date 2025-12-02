@@ -1,3 +1,5 @@
+import { open } from '@tauri-apps/plugin-shell';
+
 /**
  * 版本号格式化
  * 保留 preview/beta 等标记
@@ -34,8 +36,7 @@ export function maskApiKey(key: string): string {
  */
 export async function openExternalLink(url: string): Promise<void> {
   try {
-    // 动态导入 shell 插件
-    const { open } = await import('@tauri-apps/plugin-shell');
+    // 使用静态导入的 open（避免 Rollup 混用动态/静态导致分包警告）
     await open(url);
     console.log('链接已在浏览器中打开:', url);
   } catch (error) {

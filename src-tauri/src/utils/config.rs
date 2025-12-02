@@ -5,6 +5,15 @@ use std::path::PathBuf;
 
 /// DuckCoding 配置目录 (~/.duckcoding)，若不存在则创建
 pub fn config_dir() -> Result<PathBuf, String> {
+    if let Ok(override_dir) = std::env::var("DUCKCODING_CONFIG_DIR") {
+        let path = PathBuf::from(override_dir);
+        if !path.exists() {
+            fs::create_dir_all(&path)
+                .map_err(|e| format!("Failed to create config directory: {e}"))?;
+        }
+        return Ok(path);
+    }
+
     let home_dir = dirs::home_dir().ok_or("Failed to get home directory")?;
     let config_dir = home_dir.join(".duckcoding");
     if !config_dir.exists() {
@@ -183,5 +192,37 @@ pub fn write_global_config(config: &GlobalConfig) -> Result<(), String> {
 pub fn apply_proxy_if_configured() {
     if let Ok(Some(config)) = read_global_config() {
         ProxyService::apply_proxy_from_config(&config);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+    use std::env;
+    use tempfile::TempDir;
+
+    #[test]
+    #[serial]
+    fn config_dir_respects_env_override() {
+        let temp = TempDir::new().expect("create temp dir");
+        env::set_var("DUCKCODING_CONFIG_DIR", temp.path());
+        let dir = config_dir().expect("config_dir should succeed");
+        assert_eq!(dir, temp.path());
+        assert!(dir.exists());
+        env::remove_var("DUCKCODING_CONFIG_DIR");
+    }
+
+    #[test]
+    #[serial]
+    fn config_dir_creates_when_missing() {
+        // use random temp child path to ensure it does not exist
+        let temp = TempDir::new().expect("create temp dir");
+        let custom = temp.path().join("nested");
+        env::set_var("DUCKCODING_CONFIG_DIR", &custom);
+        let dir = config_dir().expect("config_dir should create path");
+        assert!(dir.exists());
+        assert!(dir.ends_with("nested"));
+        env::remove_var("DUCKCODING_CONFIG_DIR");
     }
 }

@@ -42,10 +42,9 @@ impl SessionManager {
 
     /// 获取数据库路径
     fn get_db_path() -> Result<PathBuf> {
-        let home = dirs::home_dir().ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::NotFound, "Home directory not found")
-        })?;
-        Ok(home.join(".duckcoding").join("sessions.db"))
+        let base = crate::utils::config::config_dir()
+            .map_err(|e| std::io::Error::other(format!("Failed to resolve config dir: {e}")))?;
+        Ok(base.join("sessions.db"))
     }
 
     /// 启动后台任务
@@ -173,9 +172,16 @@ impl SessionManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
+    use std::env;
+    use tempfile::TempDir;
 
     #[tokio::test]
+    #[serial]
     async fn test_session_manager_send_event() {
+        let temp = TempDir::new().expect("create temp dir");
+        env::set_var("DUCKCODING_CONFIG_DIR", temp.path());
+
         let timestamp = chrono::Utc::now().timestamp();
         let event = SessionEvent::NewRequest {
             session_id: "test_user_session_abc-123".to_string(),

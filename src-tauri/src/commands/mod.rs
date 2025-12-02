@@ -9,6 +9,7 @@ pub mod tool_commands;
 pub mod tool_management;
 pub mod types;
 pub mod update_commands;
+pub mod watcher_commands;
 pub mod window_commands;
 
 // 重新导出所有命令函数
@@ -22,4 +23,5 @@ pub use stats_commands::*;
 pub use tool_commands::*;
 pub use tool_management::*;
 pub use update_commands::*;
+pub use watcher_commands::*;
 pub use window_commands::*;

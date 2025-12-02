@@ -115,6 +115,8 @@ mod tests {
             hide_session_config_hint: false,
             log_config: crate::models::config::LogConfig::default(),
             onboarding_status: None,
+            external_watch_enabled: true,
+            external_poll_interval_ms: 5000,
         };
 
         let url = build_proxy_url(&config).unwrap();
@@ -145,6 +147,8 @@ mod tests {
             hide_session_config_hint: false,
             log_config: crate::models::config::LogConfig::default(),
             onboarding_status: None,
+            external_watch_enabled: true,
+            external_poll_interval_ms: 5000,
         };
 
         let url = build_proxy_url(&config).unwrap();

@@ -6,9 +6,16 @@ use std::fs;
 use super::proxy_commands::{ProxyManagerState, TransparentProxyState};
 use super::types::ActiveConfig;
 use ::duckcoding::services::config::{
-    CodexSettingsPayload, GeminiEnvPayload, GeminiSettingsPayload,
+    ClaudeSettingsPayload, CodexSettingsPayload, ExternalConfigChange, GeminiEnvPayload,
+    GeminiSettingsPayload, ImportExternalChangeResult,
+};
+use ::duckcoding::services::migration::LegacyCleanupResult;
+use ::duckcoding::services::profile_store::{
+    list_descriptors as list_profile_descriptors_internal, read_active_state, read_migration_log,
+    MigrationRecord, ProfileDescriptor,
 };
 use ::duckcoding::services::proxy::{ProxyConfig, TransparentProxyConfigService};
+use ::duckcoding::services::MigrationService;
 use ::duckcoding::utils::config::{
     apply_proxy_if_configured, read_global_config, write_global_config,
 };
@@ -535,6 +542,55 @@ pub async fn delete_profile(tool: String, profile: String) -> Result<(), String>
     Ok(())
 }
 
+/// 获取迁移报告
+#[tauri::command]
+pub async fn get_migration_report() -> Result<Vec<MigrationRecord>, String> {
+    read_migration_log().map_err(|e| e.to_string())
+}
+
+/// 获取 profile 元数据列表（可选按工具过滤）
+#[tauri::command]
+pub async fn list_profile_descriptors(
+    tool: Option<String>,
+) -> Result<Vec<ProfileDescriptor>, String> {
+    list_profile_descriptors_internal(tool.as_deref()).map_err(|e| e.to_string())
+}
+
+/// 检测外部配置变更
+#[tauri::command]
+pub async fn get_external_changes() -> Result<Vec<ExternalConfigChange>, String> {
+    ::duckcoding::services::config::ConfigService::detect_external_changes()
+        .map_err(|e| e.to_string())
+}
+
+/// 确认外部变更（清除脏标记并刷新 checksum）
+#[tauri::command]
+pub async fn ack_external_change(tool: String) -> Result<(), String> {
+    let tool_obj = Tool::by_id(&tool).ok_or_else(|| format!("❌ 未知的工具: {tool}"))?;
+    ::duckcoding::services::config::ConfigService::acknowledge_external_change(&tool_obj)
+        .map_err(|e| e.to_string())
+}
+
+/// 清理旧版备份文件（一次性）
+#[tauri::command]
+pub async fn clean_legacy_backups() -> Result<Vec<LegacyCleanupResult>, String> {
+    MigrationService::cleanup_legacy_backups().map_err(|e| e.to_string())
+}
+
+/// 将外部修改导入集中仓
+#[tauri::command]
+pub async fn import_native_change(
+    tool: String,
+    profile: String,
+    as_new: bool,
+) -> Result<ImportExternalChangeResult, String> {
+    let tool_obj = Tool::by_id(&tool).ok_or_else(|| format!("❌ 未知的工具: {tool}"))?;
+    ::duckcoding::services::config::ConfigService::import_external_change(
+        &tool_obj, &profile, as_new,
+    )
+    .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn get_active_config(tool: String) -> Result<ActiveConfig, String> {
     let home_dir = dirs::home_dir().ok_or("❌ 无法获取用户主目录")?;
@@ -573,8 +629,10 @@ pub async fn get_active_config(tool: String) -> Result<ActiveConfig, String> {
                 .and_then(|v| v.as_str())
                 .unwrap_or("未配置");
 
-            // 检测配置名称
-            let profile_name = if !raw_api_key.is_empty() && base_url != "未配置" {
+            // 检测配置名称：优先集中仓元数据，其次回退旧目录扫描
+            let profile_name = if let Ok(Some(state)) = read_active_state("claude-code") {
+                state.profile_name
+            } else if !raw_api_key.is_empty() && base_url != "未配置" {
                 detect_profile_name("claude-code", raw_api_key, base_url, &home_dir)
             } else {
                 None
@@ -648,7 +706,9 @@ pub async fn get_active_config(tool: String) -> Result<ActiveConfig, String> {
             }
 
             // 检测配置名称
-            let profile_name = if !raw_api_key.is_empty() && base_url != "未配置" {
+            let profile_name = if let Ok(Some(state)) = read_active_state("codex") {
+                state.profile_name
+            } else if !raw_api_key.is_empty() && base_url != "未配置" {
                 detect_profile_name("codex", &raw_api_key, &base_url, &home_dir)
             } else {
                 None
@@ -696,7 +756,9 @@ pub async fn get_active_config(tool: String) -> Result<ActiveConfig, String> {
             }
 
             // 检测配置名称
-            let profile_name = if !raw_api_key.is_empty() && base_url != "未配置" {
+            let profile_name = if let Ok(Some(state)) = read_active_state("gemini-cli") {
+                state.profile_name
+            } else if !raw_api_key.is_empty() && base_url != "未配置" {
                 detect_profile_name("gemini-cli", &raw_api_key, &base_url, &home_dir)
             } else {
                 None
@@ -843,13 +905,21 @@ pub async fn generate_api_key_for_tool(tool: String) -> Result<GenerateApiKeyRes
 }
 
 #[tauri::command]
-pub fn get_claude_settings() -> Result<Value, String> {
-    ConfigService::read_claude_settings().map_err(|e| e.to_string())
+pub fn get_claude_settings() -> Result<ClaudeSettingsPayload, String> {
+    ConfigService::read_claude_settings()
+        .map(|settings| {
+            let extra = ConfigService::read_claude_extra_config().ok();
+            ClaudeSettingsPayload {
+                settings,
+                extra_config: extra,
+            }
+        })
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn save_claude_settings(settings: Value) -> Result<(), String> {
-    ConfigService::save_claude_settings(&settings).map_err(|e| e.to_string())
+pub fn save_claude_settings(settings: Value, extra_config: Option<Value>) -> Result<(), String> {
+    ConfigService::save_claude_settings(&settings, extra_config.as_ref()).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

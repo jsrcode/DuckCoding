@@ -3,27 +3,54 @@
   "$id": "https://json.schemastore.org/claude-code-settings.json",
   "$defs": {
     "hookCommand": {
-      "type": "object",
-      "description": "钩子命令配置。",
-      "additionalProperties": false,
-      "required": ["type", "command"],
-      "properties": {
-        "type": {
-          "type": "string",
-          "description": "钩子实现的类型。",
-          "const": "command"
+      "anyOf": [
+        {
+          "type": "object",
+          "description": "Bash 命令钩子配置。",
+          "additionalProperties": false,
+          "required": ["type", "command"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "钩子实现的类型。",
+              "const": "command"
+            },
+            "command": {
+              "type": "string",
+              "description": "要执行的 shell 命令。",
+              "minLength": 1
+            },
+            "timeout": {
+              "type": "number",
+              "description": "该命令的可选超时时间（秒）。",
+              "exclusiveMinimum": 0
+            }
+          }
         },
-        "command": {
-          "type": "string",
-          "description": "要执行的 shell 命令。",
-          "minLength": 1
-        },
-        "timeout": {
-          "type": "number",
-          "description": "该命令的可选超时时间（秒）。",
-          "exclusiveMinimum": 0
+        {
+          "type": "object",
+          "description": "LLM 提示钩子配置，prompt 中可使用 $ARGUMENTS 占位符表示钩子输入 JSON。",
+          "additionalProperties": false,
+          "required": ["type", "prompt"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "钩子实现的类型。",
+              "const": "prompt"
+            },
+            "prompt": {
+              "type": "string",
+              "description": "要发送给 LLM 的提示文本，支持 $ARGUMENTS 占位符。",
+              "minLength": 1
+            },
+            "timeout": {
+              "type": "number",
+              "description": "该提示的可选超时时间（秒）。",
+              "exclusiveMinimum": 0
+            }
+          }
         }
-      }
+      ]
     },
     "hookMatcher": {
       "type": "object",
@@ -404,6 +431,38 @@
       },
       "examples": [["filesystem"]]
     },
+    "allowedMcpServers": {
+      "type": "array",
+      "description": "企业侧维护的 MCP 服务器允许列表，适用于所有来源（含 managed-mcp.json）。未设置表示全部允许，空数组表示全部禁止。若同时出现在 deny 列表，则以 deny 优先。",
+      "items": {
+        "type": "object",
+        "properties": {
+          "serverName": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "description": "允许配置的 MCP 服务器名称。"
+          }
+        },
+        "required": ["serverName"],
+        "additionalProperties": false
+      }
+    },
+    "deniedMcpServers": {
+      "type": "array",
+      "description": "企业侧维护的 MCP 服务器拒绝列表，命中后在所有来源中都会被拦截；与 allow 冲突时也以此为准。",
+      "items": {
+        "type": "object",
+        "properties": {
+          "serverName": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "description": "被禁止的 MCP 服务器名称。"
+          }
+        },
+        "required": ["serverName"],
+        "additionalProperties": false
+      }
+    },
     "hooks": {
       "type": "object",
       "description": "在 Claude Code 生命周期关键节点触发的钩子配置。",
@@ -560,6 +619,292 @@
       "description": "以 JSON 形式导出 AWS 凭据的命令。",
       "minLength": 1,
       "examples": ["/bin/generate_aws_grant.sh"]
+    },
+    "enabledPlugins": {
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "not": {}
+          }
+        ]
+      },
+      "description": "已启用的插件，键为 plugin-id@marketplace-id，可用布尔值或数组配置（示例：{\"formatter@anthropic-tools\": true}）。也支持带版本约束的扩展格式。"
+    },
+    "extraKnownMarketplaces": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "const": "url"
+                  },
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "marketplace.json 的直接 URL。"
+                  }
+                },
+                "required": ["source", "url"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "const": "github"
+                  },
+                  "repo": {
+                    "type": "string",
+                    "description": "GitHub 仓库（owner/repo）。"
+                  },
+                  "ref": {
+                    "type": "string",
+                    "description": "使用的 Git 分支或 tag（如 \"main\"、\"v1.0.0\"），默认仓库默认分支。"
+                  },
+                  "path": {
+                    "type": "string",
+                    "description": "仓库内 marketplace.json 的路径（默认 .claude-plugin/marketplace.json）。"
+                  }
+                },
+                "required": ["source", "repo"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "const": "git"
+                  },
+                  "url": {
+                    "type": "string",
+                    "pattern": "\\\\.git$",
+                    "description": "完整的 git 仓库地址。"
+                  },
+                  "ref": {
+                    "type": "string",
+                    "description": "使用的 Git 分支或 tag（如 \"main\"、\"v1.0.0\"），默认仓库默认分支。"
+                  },
+                  "path": {
+                    "type": "string",
+                    "description": "仓库内 marketplace.json 的路径（默认 .claude-plugin/marketplace.json）。"
+                  }
+                },
+                "required": ["source", "url"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "const": "npm"
+                  },
+                  "package": {
+                    "type": "string",
+                    "description": "包含 marketplace.json 的 NPM 包名。"
+                  }
+                },
+                "required": ["source", "package"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "const": "file"
+                  },
+                  "path": {
+                    "type": "string",
+                    "description": "本地 marketplace.json 文件路径。"
+                  }
+                },
+                "required": ["source", "path"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "const": "directory"
+                  },
+                  "path": {
+                    "type": "string",
+                    "description": "包含 .claude-plugin/marketplace.json 的本地目录。"
+                  }
+                },
+                "required": ["source", "path"],
+                "additionalProperties": false
+              }
+            ],
+            "description": "指定 marketplace 的获取方式。"
+          },
+          "installLocation": {
+            "type": "string",
+            "description": "marketplace 清单的本地缓存位置（未提供时会自动生成）。"
+          }
+        },
+        "required": ["source"],
+        "additionalProperties": false
+      },
+      "description": "为当前仓库提供的额外 marketplace 源，常用于团队项目协作。"
+    },
+    "skippedMarketplaces": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "用户在提示安装时选择跳过的 marketplace 名称列表。"
+    },
+    "skippedPlugins": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "用户在提示安装时选择跳过的插件列表（plugin@marketplace）。"
+    },
+    "otelHeadersHelper": {
+      "type": "string",
+      "description": "输出 OpenTelemetry 头部的脚本路径。",
+      "minLength": 1
+    },
+    "skipWebFetchPreflight": {
+      "type": "boolean",
+      "description": "在安全策略严格的企业环境下跳过 WebFetch 的阻断检查。"
+    },
+    "sandbox": {
+      "type": "object",
+      "properties": {
+        "network": {
+          "type": "object",
+          "properties": {
+            "allowUnixSockets": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "允许的本地 Unix Socket 路径（如 SSH agent、Docker 等），未配置默认阻止。"
+            },
+            "allowLocalBinding": {
+              "type": "boolean",
+              "description": "允许绑定本地网络地址（如 localhost 端口），未配置默认关闭。"
+            },
+            "httpProxyPort": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "用于网络过滤的 HTTP 代理端口，未指定会自动启动代理。"
+            },
+            "socksProxyPort": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "用于网络过滤的 SOCKS 代理端口，未指定会自动启动代理。"
+            }
+          },
+          "additionalProperties": false
+        },
+        "ignoreViolations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "当命令模式匹配时忽略哪些路径的沙箱违规，可用 \"*\" 匹配全部命令。"
+          },
+          "description": "命令模式到忽略的文件路径列表的映射。"
+        },
+        "excludedCommands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "永不在沙箱中运行的命令（例如 [\"git\", \"docker\"]）。"
+        },
+        "autoAllowBashIfSandboxed": {
+          "type": "boolean",
+          "description": "当命令在沙箱中运行时自动放行 Bash，无需确认（仅对将被沙箱化的命令生效）。"
+        },
+        "enableWeakerNestedSandbox": {
+          "type": "boolean",
+          "description": "在某些无法挂载 /proc 的无特权 docker 环境下启用较弱的嵌套沙箱（安全性降低，默认 false）。"
+        },
+        "allowUnsandboxedCommands": {
+          "type": "boolean",
+          "description": "允许通过 dangerouslyDisableSandbox 关闭沙箱执行。为 false 时会忽略该参数，所有命令都必须沙箱化（默认 true）。"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "是否启用沙箱 Bash。"
+        }
+      },
+      "additionalProperties": false
+    },
+    "companyAnnouncements": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "启动时展示的公司公告（如有多条会随机展示一条）。"
+    },
+    "pluginConfigs": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "mcpServers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              }
+            },
+            "description": "按服务器名称存储的 MCP 服务器用户配置。"
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "按插件（plugin@marketplace）存储的配置，包括 MCP 服务器的用户配置。"
     }
   }
 }
