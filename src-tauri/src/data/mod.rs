@@ -30,5 +30,8 @@ pub mod error;
 pub mod manager;
 pub mod managers;
 
+#[cfg(test)]
+mod migration_tests;
+
 pub use error::{DataError, Result};
 pub use manager::{CacheConfig, DataManager};

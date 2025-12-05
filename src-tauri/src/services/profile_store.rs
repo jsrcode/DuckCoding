@@ -6,6 +6,7 @@ use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::data::DataManager;
 use crate::utils::config;
 
 /// 集中配置中心目录结构：
@@ -142,8 +143,10 @@ pub fn read_migration_log() -> Result<Vec<MigrationRecord>> {
     if !path.exists() {
         return Ok(vec![]);
     }
-    let content = fs::read_to_string(&path)?;
-    let records: Vec<MigrationRecord> = serde_json::from_str(&content)?;
+    let manager = DataManager::new();
+    let json_value = manager.json().read(&path).context("读取迁移日志失败")?;
+    let records: Vec<MigrationRecord> =
+        serde_json::from_value(json_value).context("解析迁移日志失败")?;
     Ok(records)
 }
 
@@ -156,24 +159,29 @@ fn load_index() -> Result<ProfileIndex> {
     if !path.exists() {
         return Ok(ProfileIndex::default());
     }
-    let content =
-        fs::read_to_string(&path).with_context(|| format!("读取元数据索引失败: {path:?}"))?;
-    let index: ProfileIndex =
-        serde_json::from_str(&content).with_context(|| format!("解析元数据索引失败: {path:?}"))?;
+    let manager = DataManager::new();
+    let json_value = manager
+        .json()
+        .read(&path)
+        .with_context(|| format!("读取元数据索引失败: {path:?}"))?;
+    let index: ProfileIndex = serde_json::from_value(json_value)
+        .with_context(|| format!("解析元数据索引失败: {path:?}"))?;
     Ok(index)
 }
 
 fn save_index(mut index: ProfileIndex) -> Result<()> {
     let path = profile_index_path()?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
     // 按 tool_id 排序，便于 diff
     let mut sorted_entries: Vec<_> = index.entries.into_iter().collect();
     sorted_entries.sort_by(|a, b| a.0.cmp(&b.0));
     index.entries = sorted_entries.into_iter().collect();
-    let json = serde_json::to_string_pretty(&index).context("序列化元数据索引失败")?;
-    fs::write(&path, json).with_context(|| format!("写入元数据索引失败: {path:?}"))?;
+
+    let manager = DataManager::new();
+    let json_value = serde_json::to_value(&index).context("序列化元数据索引失败")?;
+    manager
+        .json()
+        .write(&path, &json_value)
+        .with_context(|| format!("写入元数据索引失败: {path:?}"))?;
     Ok(())
 }
 
@@ -317,8 +325,12 @@ pub fn save_profile_payload(
         tags: vec![],
     };
 
-    let content = serde_json::to_string_pretty(payload).context("序列化配置失败")?;
-    fs::write(&path, content).with_context(|| format!("写入集中配置失败: {path:?}"))?;
+    let manager = DataManager::new();
+    let json_value = serde_json::to_value(payload).context("序列化配置失败")?;
+    manager
+        .json()
+        .write(&path, &json_value)
+        .with_context(|| format!("写入集中配置失败: {path:?}"))?;
 
     upsert_descriptor(descriptor)?;
     Ok(())
@@ -327,9 +339,14 @@ pub fn save_profile_payload(
 pub fn load_profile_payload(tool_id: &str, profile_name: &str) -> Result<ProfilePayload> {
     let ext = profile_extension(tool_id);
     let path = profile_file_path(tool_id, profile_name, ext)?;
-    let content = fs::read_to_string(&path).with_context(|| format!("读取配置失败: {path:?}"))?;
+
+    let manager = DataManager::new();
+    let json_value = manager
+        .json()
+        .read(&path)
+        .with_context(|| format!("读取配置失败: {path:?}"))?;
     let payload: ProfilePayload =
-        serde_json::from_str(&content).with_context(|| format!("解析配置失败: {path:?}"))?;
+        serde_json::from_value(json_value).with_context(|| format!("解析配置失败: {path:?}"))?;
     Ok(payload)
 }
 
@@ -369,20 +386,24 @@ pub fn read_active_state(tool_id: &str) -> Result<Option<ActiveProfileState>> {
     if !path.exists() {
         return Ok(None);
     }
-    let content =
-        fs::read_to_string(&path).with_context(|| format!("读取激活状态失败: {path:?}"))?;
-    let state: ActiveProfileState =
-        serde_json::from_str(&content).with_context(|| format!("解析激活状态失败: {path:?}"))?;
+    let manager = DataManager::new();
+    let json_value = manager
+        .json()
+        .read(&path)
+        .with_context(|| format!("读取激活状态失败: {path:?}"))?;
+    let state: ActiveProfileState = serde_json::from_value(json_value)
+        .with_context(|| format!("解析激活状态失败: {path:?}"))?;
     Ok(Some(state))
 }
 
 pub fn save_active_state(tool_id: &str, state: &ActiveProfileState) -> Result<()> {
     let path = active_state_path(tool_id)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let json = serde_json::to_string_pretty(state).context("序列化激活状态失败")?;
-    fs::write(&path, json).with_context(|| format!("写入激活状态失败: {path:?}"))?;
+    let manager = DataManager::new();
+    let json_value = serde_json::to_value(state).context("序列化激活状态失败")?;
+    manager
+        .json()
+        .write(&path, &json_value)
+        .with_context(|| format!("写入激活状态失败: {path:?}"))?;
     Ok(())
 }
 
@@ -538,7 +559,9 @@ mod tests {
             message: None,
             timestamp: Utc::now(),
         }];
-        fs::write(&log_path, serde_json::to_string(&records)?)?;
+        let manager = DataManager::new();
+        let json_value = serde_json::to_value(&records)?;
+        manager.json().write(&log_path, &json_value)?;
 
         let loaded = read_migration_log()?;
         assert_eq!(loaded.len(), 1);

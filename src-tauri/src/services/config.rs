@@ -1,5 +1,5 @@
+use crate::data::DataManager;
 use crate::models::Tool;
-use crate::services::migration::MigrationService;
 use crate::services::profile_store::{
     delete_profile as delete_stored_profile, list_profile_names as list_stored_profiles,
     load_profile_payload, read_active_state, save_active_state, save_profile_payload,
@@ -278,7 +278,7 @@ base_url = "https://example.com/v1"
     fn apply_config_persists_claude_profile_and_state() -> Result<()> {
         let temp = TempDir::new().expect("create temp dir");
         let _guard = TempEnvGuard::new(&temp);
-        let tool = Tool::claude_code();
+        let tool = make_temp_tool("claude-code", "settings.json", &temp);
 
         ConfigService::apply_config(&tool, "k-1", "https://api.claude.com", Some("dev"))?;
 
@@ -290,11 +290,13 @@ base_url = "https://example.com/v1"
             .and_then(|v| v.as_object())
             .expect("env exists");
         assert_eq!(
-            env_obj.get("ANTHROPIC_AUTH_TOKEN").and_then(|v| v.as_str()),
+            env_obj.get(&tool.env_vars.api_key).and_then(|v| v.as_str()),
             Some("k-1")
         );
         assert_eq!(
-            env_obj.get("ANTHROPIC_BASE_URL").and_then(|v| v.as_str()),
+            env_obj
+                .get(&tool.env_vars.base_url)
+                .and_then(|v| v.as_str()),
             Some("https://api.claude.com")
         );
 
@@ -697,7 +699,7 @@ impl ConfigService {
         base_url: &str,
         profile_name: Option<&str>,
     ) -> Result<()> {
-        MigrationService::run_if_needed();
+        // 注意：Profile 迁移已移到 MigrationManager，在应用启动时统一执行
         let payload = match tool.id.as_str() {
             "claude-code" => {
                 Self::apply_claude_config(tool, api_key, base_url)?;
@@ -748,11 +750,14 @@ impl ConfigService {
     /// Claude Code 配置
     fn apply_claude_config(tool: &Tool, api_key: &str, base_url: &str) -> Result<()> {
         let config_path = tool.config_dir.join(&tool.config_file);
+        let manager = DataManager::new();
 
         // 读取现有配置
         let mut settings = if config_path.exists() {
-            let content = fs::read_to_string(&config_path).context("读取配置文件失败")?;
-            serde_json::from_str::<Value>(&content).unwrap_or(Value::Object(Map::new()))
+            manager
+                .json_uncached()
+                .read(&config_path)
+                .context("读取配置文件失败")?
         } else {
             Value::Object(Map::new())
         };
@@ -782,17 +787,7 @@ impl ConfigService {
         fs::create_dir_all(&tool.config_dir)?;
 
         // 写入配置
-        let json = serde_json::to_string_pretty(&settings)?;
-        fs::write(&config_path, json)?;
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let metadata = fs::metadata(&config_path)?;
-            let mut perms = metadata.permissions();
-            perms.set_mode(0o600);
-            fs::set_permissions(&config_path, perms)?;
-        }
+        manager.json_uncached().write(&config_path, &settings)?;
 
         let env_obj = settings
             .get("env")
@@ -831,15 +826,16 @@ impl ConfigService {
     ) -> Result<()> {
         let config_path = tool.config_dir.join(&tool.config_file);
         let auth_path = tool.config_dir.join("auth.json");
+        let manager = DataManager::new();
 
         // 确保目录存在
         fs::create_dir_all(&tool.config_dir)?;
 
         // 读取现有 config.toml（使用 toml_edit 保留注释）
         let mut doc = if config_path.exists() {
-            let content = fs::read_to_string(&config_path)?;
-            content
-                .parse::<toml_edit::DocumentMut>()
+            manager
+                .toml()
+                .read_document(&config_path)
                 .map_err(|err| anyhow!("解析 Codex config.toml 失败: {err}"))?
         } else {
             toml_edit::DocumentMut::new()
@@ -914,12 +910,14 @@ impl ConfigService {
         }
 
         // 写入 config.toml（保留注释和格式）
-        fs::write(&config_path, doc.to_string())?;
+        manager.toml().write(&config_path, &doc)?;
 
         // 更新 auth.json（增量）
         let mut auth_data = if auth_path.exists() {
-            let content = fs::read_to_string(&auth_path)?;
-            serde_json::from_str::<Value>(&content).unwrap_or(Value::Object(Map::new()))
+            manager
+                .json_uncached()
+                .read(&auth_path)
+                .unwrap_or(Value::Object(Map::new()))
         } else {
             Value::Object(Map::new())
         };
@@ -931,20 +929,7 @@ impl ConfigService {
             );
         }
 
-        fs::write(&auth_path, serde_json::to_string_pretty(&auth_data)?)?;
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            for path in [&config_path, &auth_path] {
-                if path.exists() {
-                    let metadata = fs::metadata(path)?;
-                    let mut perms = metadata.permissions();
-                    perms.set_mode(0o600);
-                    fs::set_permissions(path, perms)?;
-                }
-            }
-        }
+        manager.json_uncached().write(&auth_path, &auth_data)?;
 
         Ok(())
     }
@@ -958,23 +943,13 @@ impl ConfigService {
     ) -> Result<()> {
         let env_path = tool.config_dir.join(".env");
         let settings_path = tool.config_dir.join(&tool.config_file);
+        let manager = DataManager::new();
 
         // 确保目录存在
         fs::create_dir_all(&tool.config_dir)?;
 
         // 读取现有 .env
-        let mut env_vars = HashMap::new();
-        if env_path.exists() {
-            let content = fs::read_to_string(&env_path)?;
-            for line in content.lines() {
-                let trimmed = line.trim();
-                if !trimmed.is_empty() && !trimmed.starts_with('#') {
-                    if let Some((key, value)) = trimmed.split_once('=') {
-                        env_vars.insert(key.trim().to_string(), value.trim().to_string());
-                    }
-                }
-            }
-        }
+        let mut env_vars = Self::read_env_pairs(&env_path)?;
 
         // 更新 API 相关字段
         env_vars.insert("GOOGLE_GEMINI_BASE_URL".to_string(), base_url.to_string());
@@ -986,13 +961,14 @@ impl ConfigService {
         env_vars.insert("GEMINI_MODEL".to_string(), model_value);
 
         // 写入 .env
-        let env_content: Vec<String> = env_vars.iter().map(|(k, v)| format!("{k}={v}")).collect();
-        fs::write(&env_path, env_content.join("\n") + "\n")?;
+        Self::write_env_pairs(&env_path, &env_vars)?;
 
         // 读取并更新 settings.json
         let mut settings = if settings_path.exists() {
-            let content = fs::read_to_string(&settings_path)?;
-            serde_json::from_str::<Value>(&content).unwrap_or(Value::Object(Map::new()))
+            manager
+                .json_uncached()
+                .read(&settings_path)
+                .unwrap_or(Value::Object(Map::new()))
         } else {
             Value::Object(Map::new())
         };
@@ -1011,20 +987,7 @@ impl ConfigService {
             }
         }
 
-        fs::write(&settings_path, serde_json::to_string_pretty(&settings)?)?;
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            for path in [&env_path, &settings_path] {
-                if path.exists() {
-                    let metadata = fs::metadata(path)?;
-                    let mut perms = metadata.permissions();
-                    perms.set_mode(0o600);
-                    fs::set_permissions(path, perms)?;
-                }
-            }
-        }
+        manager.json_uncached().write(&settings_path, &settings)?;
 
         Ok(())
     }
@@ -1043,14 +1006,17 @@ impl ConfigService {
     fn backup_claude(tool: &Tool, profile_name: &str) -> Result<()> {
         let config_path = tool.config_dir.join(&tool.config_file);
         let backup_path = tool.backup_path(profile_name);
+        let manager = DataManager::new();
 
         if !config_path.exists() {
             anyhow::bail!("配置文件不存在，无法备份");
         }
 
         // 读取当前配置，只提取 API 相关字段
-        let content = fs::read_to_string(&config_path).context("读取配置文件失败")?;
-        let settings: Value = serde_json::from_str(&content).context("解析配置文件失败")?;
+        let settings = manager
+            .json_uncached()
+            .read(&config_path)
+            .context("读取配置文件失败")?;
 
         // 只保存 API 相关字段
         let backup_data = serde_json::json!({
@@ -1067,7 +1033,7 @@ impl ConfigService {
         });
 
         // 写入备份（仅包含 API 字段）
-        fs::write(&backup_path, serde_json::to_string_pretty(&backup_data)?)?;
+        manager.json_uncached().write(&backup_path, &backup_data)?;
 
         Ok(())
     }
@@ -1075,14 +1041,13 @@ impl ConfigService {
     fn backup_codex(tool: &Tool, profile_name: &str) -> Result<()> {
         let config_path = tool.config_dir.join("config.toml");
         let auth_path = tool.config_dir.join("auth.json");
-
         let backup_config = tool.config_dir.join(format!("config.{profile_name}.toml"));
         let backup_auth = tool.config_dir.join(format!("auth.{profile_name}.json"));
+        let manager = DataManager::new();
 
         // 读取 auth.json 中的 API Key
         let api_key = if auth_path.exists() {
-            let content = fs::read_to_string(&auth_path)?;
-            let auth: Value = serde_json::from_str(&content)?;
+            let auth = manager.json_uncached().read(&auth_path)?;
             auth.get("OPENAI_API_KEY")
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
@@ -1095,48 +1060,44 @@ impl ConfigService {
         let backup_auth_data = serde_json::json!({
             "OPENAI_API_KEY": api_key
         });
-        fs::write(
-            &backup_auth,
-            serde_json::to_string_pretty(&backup_auth_data)?,
-        )?;
+        manager
+            .json_uncached()
+            .write(&backup_auth, &backup_auth_data)?;
 
         // 对于 config.toml，只备份当前使用的 provider 的完整配置
         if config_path.exists() {
-            let content = fs::read_to_string(&config_path)?;
-            if let Ok(doc) = content.parse::<toml_edit::DocumentMut>() {
-                let mut backup_doc = toml_edit::DocumentMut::new();
+            let doc = manager.toml().read_document(&config_path)?;
+            let mut backup_doc = toml_edit::DocumentMut::new();
 
-                // 获取当前使用的 model_provider
-                let current_provider_name = doc
-                    .get("model_provider")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow::anyhow!("配置文件缺少 model_provider 字段"))?;
+            // 获取当前使用的 model_provider
+            let current_provider_name = doc
+                .get("model_provider")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("配置文件缺少 model_provider 字段"))?;
 
-                // 只备份当前 provider 的完整配置
-                if let Some(providers) = doc.get("model_providers").and_then(|p| p.as_table()) {
-                    if let Some(current_provider) = providers.get(current_provider_name) {
-                        tracing::debug!(
-                            provider = %current_provider_name,
-                            profile = %profile_name,
-                            "备份 Codex 配置"
+            // 只备份当前 provider 的完整配置
+            if let Some(providers) = doc.get("model_providers").and_then(|p| p.as_table()) {
+                if let Some(current_provider) = providers.get(current_provider_name) {
+                    tracing::debug!(
+                        provider = %current_provider_name,
+                        profile = %profile_name,
+                        "备份 Codex 配置"
 
-                        );
-                        let mut backup_providers = toml_edit::Table::new();
-                        backup_providers.insert(current_provider_name, current_provider.clone());
-                        backup_doc
-                            .insert("model_providers", toml_edit::Item::Table(backup_providers));
-                    } else {
-                        anyhow::bail!("未找到 model_provider '{current_provider_name}' 的配置");
-                    }
+                    );
+                    let mut backup_providers = toml_edit::Table::new();
+                    backup_providers.insert(current_provider_name, current_provider.clone());
+                    backup_doc.insert("model_providers", toml_edit::Item::Table(backup_providers));
                 } else {
-                    anyhow::bail!("配置文件缺少 model_providers 表");
+                    anyhow::bail!("未找到 model_provider '{current_provider_name}' 的配置");
                 }
-
-                // 保存当前的 model_provider 选择
-                backup_doc.insert("model_provider", toml_edit::value(current_provider_name));
-
-                fs::write(&backup_config, backup_doc.to_string())?;
+            } else {
+                anyhow::bail!("配置文件缺少 model_providers 表");
             }
+
+            // 保存当前的 model_provider 选择
+            backup_doc.insert("model_provider", toml_edit::value(current_provider_name));
+
+            manager.toml().write(&backup_config, &backup_doc)?;
         }
 
         Ok(())
@@ -1184,13 +1145,13 @@ impl ConfigService {
 
     /// 列出所有保存的配置
     pub fn list_profiles(tool: &Tool) -> Result<Vec<String>> {
-        MigrationService::run_if_needed();
+        // 注意：Profile 迁移已移到 MigrationManager
         list_stored_profiles(&tool.id)
     }
 
     /// 激活指定的配置
     pub fn activate_profile(tool: &Tool, profile_name: &str) -> Result<()> {
-        MigrationService::run_if_needed();
+        // 注意：Profile 迁移已移到 MigrationManager
         let payload = load_profile_payload(&tool.id, profile_name)?;
         match (tool.id.as_str(), payload) {
             (
@@ -1335,7 +1296,7 @@ impl ConfigService {
 
     /// 删除配置
     pub fn delete_profile(tool: &Tool, profile_name: &str) -> Result<()> {
-        MigrationService::run_if_needed();
+        // 注意：Profile 迁移已移到 MigrationManager
         delete_stored_profile(&tool.id, profile_name)?;
         if let Ok(Some(mut state)) = read_active_state(&tool.id) {
             if state.profile_name.as_deref() == Some(profile_name) {
@@ -1357,13 +1318,11 @@ impl ConfigService {
             return Ok(Value::Object(Map::new()));
         }
 
-        let content = fs::read_to_string(&config_path).context("读取 Claude Code 配置失败")?;
-        if content.trim().is_empty() {
-            return Ok(Value::Object(Map::new()));
-        }
-
-        let settings: Value = serde_json::from_str(&content)
-            .map_err(|err| anyhow!("解析 Claude Code 配置失败: {err}"))?;
+        let manager = DataManager::new();
+        let settings = manager
+            .json_uncached()
+            .read(&config_path)
+            .context("读取 Claude Code 配置失败")?;
 
         Ok(settings)
     }
@@ -1375,13 +1334,11 @@ impl ConfigService {
         if !extra_path.exists() {
             return Ok(Value::Object(Map::new()));
         }
-        let content =
-            fs::read_to_string(&extra_path).context("读取 Claude Code config.json 失败")?;
-        if content.trim().is_empty() {
-            return Ok(Value::Object(Map::new()));
-        }
-        let json: Value = serde_json::from_str(&content)
-            .map_err(|err| anyhow!("解析 Claude Code config.json 失败: {err}"))?;
+        let manager = DataManager::new();
+        let json = manager
+            .json_uncached()
+            .read(&extra_path)
+            .context("读取 Claude Code config.json 失败")?;
         Ok(json)
     }
 
@@ -1397,31 +1354,21 @@ impl ConfigService {
         let extra_config_path = config_dir.join("config.json");
 
         fs::create_dir_all(config_dir).context("创建 Claude Code 配置目录失败")?;
-        let json = serde_json::to_string_pretty(settings)?;
-        fs::write(&config_path, json).context("写入 Claude Code 配置失败")?;
+
+        let manager = DataManager::new();
+        manager
+            .json_uncached()
+            .write(&config_path, settings)
+            .context("写入 Claude Code 配置失败")?;
 
         if let Some(extra) = extra_config {
             if !extra.is_object() {
                 anyhow::bail!("Claude Code config.json 必须是 JSON 对象");
             }
-            fs::write(&extra_config_path, serde_json::to_string_pretty(extra)?)
+            manager
+                .json_uncached()
+                .write(&extra_config_path, extra)
                 .context("写入 Claude Code config.json 失败")?;
-        }
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let metadata = fs::metadata(&config_path)?;
-            let mut perms = metadata.permissions();
-            perms.set_mode(0o600);
-            fs::set_permissions(&config_path, perms)?;
-
-            if extra_config_path.exists() {
-                let metadata = fs::metadata(&extra_config_path)?;
-                let mut perms = metadata.permissions();
-                perms.set_mode(0o600);
-                fs::set_permissions(&extra_config_path, perms)?;
-            }
         }
 
         let env_obj = settings
@@ -1469,21 +1416,23 @@ impl ConfigService {
         let tool = Tool::codex();
         let config_path = tool.config_dir.join(&tool.config_file);
         let auth_path = tool.config_dir.join("auth.json");
+        let manager = DataManager::new();
 
         let config_value = if config_path.exists() {
-            let content =
-                fs::read_to_string(&config_path).context("读取 Codex config.toml 失败")?;
-            let toml_value: toml::Value = toml::from_str(&content)
-                .map_err(|err| anyhow!("解析 Codex config.toml 失败: {err}"))?;
-            serde_json::to_value(toml_value).context("转换 Codex config.toml 为 JSON 失败")?
+            let doc = manager
+                .toml()
+                .read(&config_path)
+                .context("读取 Codex config.toml 失败")?;
+            serde_json::to_value(&doc).context("转换 Codex config.toml 为 JSON 失败")?
         } else {
             Value::Object(Map::new())
         };
 
         let auth_token = if auth_path.exists() {
-            let content = fs::read_to_string(&auth_path).context("读取 Codex auth.json 失败")?;
-            let auth: Value = serde_json::from_str(&content)
-                .map_err(|err| anyhow!("解析 Codex auth.json 失败: {err}"))?;
+            let auth = manager
+                .json_uncached()
+                .read(&auth_path)
+                .context("读取 Codex auth.json 失败")?;
             auth.get("OPENAI_API_KEY")
                 .and_then(|s| s.as_str().map(|s| s.to_string()))
         } else {
@@ -1505,15 +1454,16 @@ impl ConfigService {
         let tool = Tool::codex();
         let config_path = tool.config_dir.join(&tool.config_file);
         let auth_path = tool.config_dir.join("auth.json");
+        let manager = DataManager::new();
+
         fs::create_dir_all(&tool.config_dir).context("创建 Codex 配置目录失败")?;
         let mut final_auth_token = auth_token.clone();
 
         let mut existing_doc = if config_path.exists() {
-            let content =
-                fs::read_to_string(&config_path).context("读取 Codex config.toml 失败")?;
-            content
-                .parse::<DocumentMut>()
-                .map_err(|err| anyhow!("解析 Codex config.toml 失败: {err}"))?
+            manager
+                .toml()
+                .read_document(&config_path)
+                .context("读取 Codex config.toml 失败")?
         } else {
             DocumentMut::new()
         };
@@ -1525,13 +1475,18 @@ impl ConfigService {
 
         merge_toml_tables(existing_doc.as_table_mut(), new_doc.as_table());
 
-        fs::write(&config_path, existing_doc.to_string()).context("写入 Codex config.toml 失败")?;
+        manager
+            .toml()
+            .write(&config_path, &existing_doc)
+            .context("写入 Codex config.toml 失败")?;
 
         if let Some(token) = auth_token {
             final_auth_token = Some(token.clone());
             let mut auth_data = if auth_path.exists() {
-                let content = fs::read_to_string(&auth_path).unwrap_or_default();
-                serde_json::from_str::<Value>(&content).unwrap_or(Value::Object(Map::new()))
+                manager
+                    .json_uncached()
+                    .read(&auth_path)
+                    .unwrap_or(Value::Object(Map::new()))
             } else {
                 Value::Object(Map::new())
             };
@@ -1540,36 +1495,18 @@ impl ConfigService {
                 obj.insert("OPENAI_API_KEY".to_string(), Value::String(token));
             }
 
-            fs::write(&auth_path, serde_json::to_string_pretty(&auth_data)?)
+            manager
+                .json_uncached()
+                .write(&auth_path, &auth_data)
                 .context("写入 Codex auth.json 失败")?;
-
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                let metadata = fs::metadata(&auth_path)?;
-                let mut perms = metadata.permissions();
-                perms.set_mode(0o600);
-                fs::set_permissions(&auth_path, perms)?;
-            }
-        }
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let metadata = fs::metadata(&config_path)?;
-            let mut perms = metadata.permissions();
-            perms.set_mode(0o600);
-            fs::set_permissions(&config_path, perms)?;
         }
 
         if final_auth_token.is_none() && auth_path.exists() {
-            if let Ok(content) = fs::read_to_string(&auth_path) {
-                if let Ok(auth) = serde_json::from_str::<Value>(&content) {
-                    final_auth_token = auth
-                        .get("OPENAI_API_KEY")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
-                }
+            if let Ok(auth) = manager.json_uncached().read(&auth_path) {
+                final_auth_token = auth
+                    .get("OPENAI_API_KEY")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
             }
         }
 
@@ -1618,15 +1555,13 @@ impl ConfigService {
         let tool = Tool::gemini_cli();
         let settings_path = tool.config_dir.join(&tool.config_file);
         let env_path = tool.config_dir.join(".env");
+        let manager = DataManager::new();
 
         let settings = if settings_path.exists() {
-            let content = fs::read_to_string(&settings_path).context("读取 Gemini CLI 配置失败")?;
-            if content.trim().is_empty() {
-                Value::Object(Map::new())
-            } else {
-                serde_json::from_str(&content)
-                    .map_err(|err| anyhow!("解析 Gemini CLI 配置失败: {err}"))?
-            }
+            manager
+                .json_uncached()
+                .read(&settings_path)
+                .context("读取 Gemini CLI 配置失败")?
         } else {
             Value::Object(Map::new())
         };
@@ -1646,10 +1581,14 @@ impl ConfigService {
         let config_dir = &tool.config_dir;
         let settings_path = config_dir.join(&tool.config_file);
         let env_path = config_dir.join(".env");
+        let manager = DataManager::new();
+
         fs::create_dir_all(config_dir).context("创建 Gemini CLI 配置目录失败")?;
 
-        let json = serde_json::to_string_pretty(settings)?;
-        fs::write(&settings_path, json).context("写入 Gemini CLI 配置失败")?;
+        manager
+            .json_uncached()
+            .write(&settings_path, settings)
+            .context("写入 Gemini CLI 配置失败")?;
 
         let mut env_pairs = Self::read_env_pairs(&env_path)?;
         env_pairs.insert("GEMINI_API_KEY".to_string(), env.api_key.clone());
@@ -1663,19 +1602,6 @@ impl ConfigService {
             },
         );
         Self::write_env_pairs(&env_path, &env_pairs).context("写入 Gemini CLI .env 失败")?;
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            for path in [&settings_path, &env_path] {
-                if path.exists() {
-                    let metadata = fs::metadata(path)?;
-                    let mut perms = metadata.permissions();
-                    perms.set_mode(0o600);
-                    fs::set_permissions(path, perms)?;
-                }
-            }
-        }
 
         let profile_name = Self::profile_name_for_sync(&tool.id);
         let (raw_settings, raw_env) = Self::read_gemini_raw(&tool);
@@ -1729,37 +1655,19 @@ impl ConfigService {
     }
 
     fn read_env_pairs(path: &Path) -> Result<HashMap<String, String>> {
-        let mut pairs = HashMap::new();
-        if path.exists() {
-            let content = fs::read_to_string(path)?;
-            for line in content.lines() {
-                let trimmed = line.trim();
-                if trimmed.is_empty() || trimmed.starts_with('#') {
-                    continue;
-                }
-                if let Some((key, value)) = trimmed.split_once('=') {
-                    pairs.insert(key.trim().to_string(), value.trim().to_string());
-                }
-            }
+        if !path.exists() {
+            return Ok(HashMap::new());
         }
-        Ok(pairs)
+        let manager = DataManager::new();
+        manager.env().read(path).map_err(|e| anyhow::anyhow!(e))
     }
 
     fn write_env_pairs(path: &Path, pairs: &HashMap<String, String>) -> Result<()> {
-        let mut items: Vec<_> = pairs.iter().collect();
-        items.sort_by(|a, b| a.0.cmp(b.0));
-        let mut content = String::new();
-        for (idx, (key, value)) in items.iter().enumerate() {
-            if idx > 0 {
-                content.push('\n');
-            }
-            content.push_str(key);
-            content.push('=');
-            content.push_str(value);
-        }
-        content.push('\n');
-        fs::write(path, content)?;
-        Ok(())
+        let manager = DataManager::new();
+        manager
+            .env()
+            .write(path, pairs)
+            .map_err(|e| anyhow::anyhow!(e))
     }
 
     fn read_codex_raw(tool: &Tool) -> (Option<String>, Option<Value>) {
@@ -1938,11 +1846,12 @@ impl ConfigService {
                 let auth_path = tool.config_dir.join("auth.json");
                 let mut api_key = String::new();
                 let mut raw_auth_json = None;
+                let manager = DataManager::new();
                 if auth_path.exists() {
-                    let auth_content =
-                        fs::read_to_string(&auth_path).context("读取 Codex auth.json 失败")?;
-                    let auth: Value =
-                        serde_json::from_str(&auth_content).context("解析 Codex auth.json 失败")?;
+                    let auth = manager
+                        .json_uncached()
+                        .read(&auth_path)
+                        .context("读取 Codex auth.json 失败")?;
                     raw_auth_json = Some(auth.clone());
                     api_key = auth
                         .get("OPENAI_API_KEY")
@@ -2012,7 +1921,7 @@ impl ConfigService {
         profile_name: &str,
         as_new: bool,
     ) -> Result<ImportExternalChangeResult> {
-        MigrationService::run_if_needed();
+        // 注意：Profile 迁移已移到 MigrationManager
 
         let target_profile = profile_name.trim();
         if target_profile.is_empty() {
@@ -2051,8 +1960,14 @@ impl ConfigService {
     pub fn detect_external_changes() -> Result<Vec<ExternalConfigChange>> {
         let mut changes = Vec::new();
         for tool in Tool::all() {
+            // 只检测已经有 active_state 的工具（跳过从未使用过的工具）
+            let state_opt = read_active_state(&tool.id)?;
+            if state_opt.is_none() {
+                continue;
+            }
+
             let current_checksum = Self::compute_native_checksum(&tool);
-            let mut state = read_active_state(&tool.id)?.unwrap_or_default();
+            let mut state = state_opt.unwrap();
             let last_checksum = state.native_checksum.clone();
             if last_checksum != current_checksum {
                 // 标记脏，但保留旧 checksum 以便前端确认后再更新

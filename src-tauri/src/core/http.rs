@@ -94,6 +94,7 @@ mod tests {
     #[test]
     fn test_build_proxy_url_http() {
         let config = GlobalConfig {
+            version: None,
             user_id: "test".to_string(),
             system_token: "test".to_string(),
             proxy_enabled: true,
@@ -117,6 +118,7 @@ mod tests {
             onboarding_status: None,
             external_watch_enabled: true,
             external_poll_interval_ms: 5000,
+            single_instance_enabled: true,
         };
 
         let url = build_proxy_url(&config).unwrap();
@@ -126,6 +128,7 @@ mod tests {
     #[test]
     fn test_build_proxy_url_with_auth() {
         let config = GlobalConfig {
+            version: None,
             user_id: "test".to_string(),
             system_token: "test".to_string(),
             proxy_enabled: true,
@@ -149,6 +152,7 @@ mod tests {
             onboarding_status: None,
             external_watch_enabled: true,
             external_poll_interval_ms: 5000,
+            single_instance_enabled: true,
         };
 
         let url = build_proxy_url(&config).unwrap();

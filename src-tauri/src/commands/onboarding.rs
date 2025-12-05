@@ -8,6 +8,7 @@ use tracing::{error, info};
 /// 创建最小默认配置（仅用于首次启动）
 fn create_minimal_config() -> GlobalConfig {
     GlobalConfig {
+        version: Some("0.0.0".to_string()),
         user_id: String::new(),
         system_token: String::new(),
         proxy_enabled: false,
@@ -31,6 +32,7 @@ fn create_minimal_config() -> GlobalConfig {
         onboarding_status: None,
         external_watch_enabled: true,
         external_poll_interval_ms: 5000,
+        single_instance_enabled: true,
     }
 }
 
