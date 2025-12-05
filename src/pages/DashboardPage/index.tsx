@@ -39,10 +39,10 @@ export function DashboardPage({ tools: toolsProp, loading: loadingProp }: Dashbo
     setLoading(loadingProp);
   }, [toolsProp, loadingProp, updateTools]);
 
-  // 通知父组件刷新工具列表
-  const refreshTools = () => {
-    window.dispatchEvent(new CustomEvent('refresh-tools'));
-  };
+  // // 通知父组件刷新工具列表
+  // const refreshTools = () => {
+  //   window.dispatchEvent(new CustomEvent('refresh-tools'));
+  // };
 
   // 手动刷新工具状态（清除缓存重新检测）
   const handleRefreshToolStatus = async () => {
@@ -79,12 +79,13 @@ export function DashboardPage({ tools: toolsProp, loading: loadingProp }: Dashbo
     }
 
     if (result.success) {
-      refreshTools();
       toast({
         title: '更新成功',
         description: `${getToolDisplayName(toolId)} ${result.message}`,
       });
-      // 更新成功后自动检测工具状态，显示「最新版」标识
+      // 更新成功后重新检测工具状态（而不是仅读数据库）
+      await handleRefreshToolStatus();
+      // 更新成功后自动检测工具更新状态，显示「最新版」标识
       await checkSingleToolUpdate(toolId);
     } else {
       toast({

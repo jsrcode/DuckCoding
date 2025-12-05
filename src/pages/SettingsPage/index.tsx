@@ -6,6 +6,7 @@ import { PageContainer } from '@/components/layout/PageContainer';
 import { useToast } from '@/hooks/use-toast';
 import { useSettingsForm } from './hooks/useSettingsForm';
 import { BasicSettingsTab } from './components/BasicSettingsTab';
+import { ApplicationSettingsTab } from './components/ApplicationSettingsTab';
 import { ProxySettingsTab } from './components/ProxySettingsTab';
 import { LogSettingsTab } from './components/LogSettingsTab';
 import { TransparentProxyMigrationNotice } from './components/TransparentProxyMigrationNotice';
@@ -168,6 +169,12 @@ export function SettingsPage({
             基本设置
           </TabsTrigger>
           <TabsTrigger
+            value="application"
+            disabled={!!restrictToTab && restrictToTab !== 'application'}
+          >
+            应用设置
+          </TabsTrigger>
+          <TabsTrigger
             value="config-management"
             disabled={!!restrictToTab && restrictToTab !== 'config-management'}
           >
@@ -198,6 +205,11 @@ export function SettingsPage({
             systemToken={systemToken}
             setSystemToken={setSystemToken}
           />
+        </TabsContent>
+
+        {/* 应用设置 */}
+        <TabsContent value="application" className="space-y-6">
+          <ApplicationSettingsTab />
         </TabsContent>
 
         {/* 代理设置 */}

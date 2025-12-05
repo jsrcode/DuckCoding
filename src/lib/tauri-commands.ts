@@ -66,6 +66,8 @@ export interface GlobalConfig {
   // 配置监听
   external_watch_enabled?: boolean;
   external_poll_interval_ms?: number;
+  // 单实例模式开关（默认 true，仅生产环境生效）
+  single_instance_enabled?: boolean;
 }
 
 export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error';
@@ -823,4 +825,22 @@ export async function hasToolsInDatabase(): Promise<boolean> {
  */
 export async function detectAndSaveTools(): Promise<ToolInstance[]> {
   return await invoke<ToolInstance[]>('detect_and_save_tools');
+}
+
+// ==================== 单实例模式配置命令 ====================
+
+/**
+ * 获取单实例模式配置状态
+ * @returns 单实例模式是否启用
+ */
+export async function getSingleInstanceConfig(): Promise<boolean> {
+  return await invoke<boolean>('get_single_instance_config');
+}
+
+/**
+ * 更新单实例模式配置（需要重启应用生效）
+ * @param enabled - 是否启用单实例模式
+ */
+export async function updateSingleInstanceConfig(enabled: boolean): Promise<void> {
+  return await invoke<void>('update_single_instance_config', { enabled });
 }

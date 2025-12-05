@@ -19,8 +19,10 @@ pub use services::transparent_proxy::{ProxyConfig, TransparentProxyService};
 pub use services::transparent_proxy_config::TransparentProxyConfigService;
 pub use services::update::UpdateService;
 pub use services::version::VersionService;
-// Re-export tool status cache and tool registry
-pub use services::tool::{ToolRegistry, ToolStatusCache};
+// Re-export tool registry (unified tool management)
+pub use services::tool::ToolRegistry;
+// Re-export migration manager
+pub use services::migration_manager::{create_migration_manager, MigrationManager};
 // Re-export new proxy architecture types
 pub use models::ToolProxyConfig;
 pub use services::proxy::{ProxyInstance, ProxyManager, RequestProcessor};

@@ -16,9 +16,9 @@ mod commands;
 use commands::*;
 
 // 导入透明代理服务
+use duckcoding::ProxyManager;
 use duckcoding::TransparentProxyService;
 use duckcoding::{services::config_watcher::NotifyWatcherManager, services::EXTERNAL_CHANGE_EVENT};
-use duckcoding::{ProxyManager, ToolStatusCache};
 use std::sync::Arc;
 use tokio::sync::Mutex as TokioMutex;
 
@@ -180,13 +180,30 @@ fn main() {
 
     let update_service_state = UpdateServiceState::new();
 
-    // 创建工具状态缓存
-    let tool_status_cache = Arc::new(ToolStatusCache::new());
-    let tool_status_cache_state = ToolStatusCacheState {
-        cache: tool_status_cache,
-    };
+    // 执行数据迁移（版本驱动）
+    tracing::info!("执行数据迁移检查");
+    tauri::async_runtime::block_on(async {
+        let migration_manager = duckcoding::create_migration_manager();
+        match migration_manager.run_all().await {
+            Ok(results) => {
+                if !results.is_empty() {
+                    tracing::info!("迁移执行完成：{} 个迁移", results.len());
+                    for result in results {
+                        if result.success {
+                            tracing::info!("✅ {}: {}", result.migration_id, result.message);
+                        } else {
+                            tracing::error!("❌ {}: {}", result.migration_id, result.message);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::error!("迁移执行失败: {}", e);
+            }
+        }
+    });
 
-    // 创建工具注册表（工具管理系统）
+    // 创建工具注册表（统一工具管理系统）
     let tool_registry = tauri::async_runtime::block_on(async {
         duckcoding::ToolRegistry::new()
             .await
@@ -196,12 +213,31 @@ fn main() {
         registry: Arc::new(TokioMutex::new(tool_registry)),
     };
 
+    // 判断是否启用单实例模式
+    // 开发环境：始终禁用（方便调试和与正式版隔离）
+    // 生产环境：根据配置决定（默认启用）
+    let single_instance_enabled = if cfg!(debug_assertions) {
+        false // 开发环境禁用
+    } else {
+        // 生产环境读取配置
+        read_global_config()
+            .ok()
+            .flatten()
+            .map(|cfg| cfg.single_instance_enabled)
+            .unwrap_or(true) // 默认启用
+    };
+
+    tracing::info!(
+        is_debug = cfg!(debug_assertions),
+        single_instance_enabled = single_instance_enabled,
+        "单实例模式配置"
+    );
+
     let builder = tauri::Builder::default()
         .manage(transparent_proxy_state)
         .manage(proxy_manager_state)
         .manage(watcher_state)
         .manage(update_service_state)
-        .manage(tool_status_cache_state)
         .manage(tool_registry_state)
         .setup(|app| {
             // 尝试在应用启动时加载全局配置并应用代理设置,确保子进程继承代理 env
@@ -377,8 +413,12 @@ fn main() {
 
             Ok(())
         })
-        .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+        .plugin(tauri_plugin_shell::init());
+
+    // 条件注册单实例插件
+    let builder = if single_instance_enabled {
+        tracing::info!("注册单实例插件");
+        builder.plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
             tracing::info!(
                 argv = ?argv,
                 cwd = %cwd,
@@ -397,96 +437,104 @@ fn main() {
 
             focus_main_window(app);
         }))
-        .invoke_handler(tauri::generate_handler![
-            check_installations,
-            refresh_tool_status,
-            check_node_environment,
-            install_tool,
-            check_update,
-            check_all_updates,
-            update_tool,
-            configure_api,
-            list_profiles,
-            switch_profile,
-            delete_profile,
-            get_active_config,
-            get_profile_config,
-            save_global_config,
-            get_global_config,
-            generate_api_key_for_tool,
-            get_migration_report,
-            list_profile_descriptors,
-            get_external_changes,
-            ack_external_change,
-            clean_legacy_backups,
-            import_native_change,
-            get_usage_stats,
-            get_user_quota,
-            fetch_api,
-            handle_close_action,
-            // expose current proxy for debugging/testing
-            get_current_proxy,
-            apply_proxy_now,
-            test_proxy_request,
-            get_claude_settings,
-            save_claude_settings,
-            get_claude_schema,
-            get_codex_settings,
-            save_codex_settings,
-            get_codex_schema,
-            get_gemini_settings,
-            save_gemini_settings,
-            get_gemini_schema,
-            // 透明代理相关命令
-            start_transparent_proxy,
-            stop_transparent_proxy,
-            get_transparent_proxy_status,
-            update_transparent_proxy_config,
-            // 多工具透明代理命令（新架构）
-            start_tool_proxy,
-            stop_tool_proxy,
-            get_all_proxy_status,
-            // 会话管理命令
-            get_session_list,
-            delete_session,
-            clear_all_sessions,
-            update_session_config,
-            update_session_note,
-            // 配置监听控制
-            get_watcher_status,
-            start_watcher_if_needed,
-            stop_watcher,
-            save_watcher_settings,
-            // 更新管理相关命令
-            check_for_app_updates,
-            download_app_update,
-            install_app_update,
-            get_app_update_status,
-            rollback_app_update,
-            get_current_app_version,
-            restart_app_for_update,
-            get_platform_info,
-            get_recommended_package_format,
-            trigger_check_update,
-            // 日志管理命令
-            get_log_config,
-            update_log_config,
-            is_release_build,
-            // 工具管理命令（工具管理系统）
-            get_tool_instances,
-            refresh_tool_instances,
-            list_wsl_distributions,
-            add_wsl_tool_instance,
-            add_ssh_tool_instance,
-            delete_tool_instance,
-            has_tools_in_database,
-            detect_and_save_tools,
-            // 引导管理命令
-            get_onboarding_status,
-            save_onboarding_progress,
-            complete_onboarding,
-            reset_onboarding,
-        ]);
+    } else {
+        tracing::info!("单实例插件已禁用（开发环境或用户配置）");
+        builder
+    };
+
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        check_installations,
+        refresh_tool_status,
+        check_node_environment,
+        install_tool,
+        check_update,
+        check_all_updates,
+        update_tool,
+        configure_api,
+        list_profiles,
+        switch_profile,
+        delete_profile,
+        get_active_config,
+        get_profile_config,
+        save_global_config,
+        get_global_config,
+        generate_api_key_for_tool,
+        get_migration_report,
+        list_profile_descriptors,
+        get_external_changes,
+        ack_external_change,
+        clean_legacy_backups,
+        import_native_change,
+        get_usage_stats,
+        get_user_quota,
+        fetch_api,
+        handle_close_action,
+        // expose current proxy for debugging/testing
+        get_current_proxy,
+        apply_proxy_now,
+        test_proxy_request,
+        get_claude_settings,
+        save_claude_settings,
+        get_claude_schema,
+        get_codex_settings,
+        save_codex_settings,
+        get_codex_schema,
+        get_gemini_settings,
+        save_gemini_settings,
+        get_gemini_schema,
+        // 透明代理相关命令
+        start_transparent_proxy,
+        stop_transparent_proxy,
+        get_transparent_proxy_status,
+        update_transparent_proxy_config,
+        // 多工具透明代理命令（新架构）
+        start_tool_proxy,
+        stop_tool_proxy,
+        get_all_proxy_status,
+        // 会话管理命令
+        get_session_list,
+        delete_session,
+        clear_all_sessions,
+        update_session_config,
+        update_session_note,
+        // 配置监听控制
+        get_watcher_status,
+        start_watcher_if_needed,
+        stop_watcher,
+        save_watcher_settings,
+        // 更新管理相关命令
+        check_for_app_updates,
+        download_app_update,
+        install_app_update,
+        get_app_update_status,
+        rollback_app_update,
+        get_current_app_version,
+        restart_app_for_update,
+        get_platform_info,
+        get_recommended_package_format,
+        trigger_check_update,
+        // 日志管理命令
+        get_log_config,
+        update_log_config,
+        is_release_build,
+        // 工具管理命令（工具管理系统）
+        get_tool_instances,
+        refresh_tool_instances,
+        list_wsl_distributions,
+        add_wsl_tool_instance,
+        add_ssh_tool_instance,
+        delete_tool_instance,
+        has_tools_in_database,
+        detect_and_save_tools,
+        // 引导管理命令
+        get_onboarding_status,
+        save_onboarding_progress,
+        complete_onboarding,
+        reset_onboarding,
+        // 单实例模式配置命令
+        get_single_instance_config,
+        update_single_instance_config,
+    ]);
 
     // 使用自定义事件循环处理 macOS Reopen 事件
     builder

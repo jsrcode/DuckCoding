@@ -1,36 +1,50 @@
+use crate::commands::tool_management::ToolRegistryState;
 use crate::commands::types::{InstallResult, NodeEnvironment, ToolStatus, UpdateResult};
 use ::duckcoding::models::{InstallMethod, Tool};
-use ::duckcoding::services::{InstallerService, ToolStatusCache, VersionService};
+use ::duckcoding::services::{InstallerService, VersionService};
 use ::duckcoding::utils::config::apply_proxy_if_configured;
 use ::duckcoding::utils::platform::PlatformInfo;
 use std::process::Command;
-use std::sync::Arc;
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
-/// 工具状态缓存 State
-pub struct ToolStatusCacheState {
-    pub cache: Arc<ToolStatusCache>,
-}
-
-/// 检查所有工具的安装状态（使用缓存 + 并行检测）
+/// 检查所有工具的安装状态（新架构：优先从数据库读取）
+///
+/// 工作流程：
+/// 1. 检查数据库是否有数据
+/// 2. 如果没有 → 执行首次检测并保存到数据库
+/// 3. 从数据库读取并返回轻量级 ToolStatus
+///
+/// 性能：数据库读取 < 10ms，首次检测约 1.3s
 #[tauri::command]
 pub async fn check_installations(
-    state: tauri::State<'_, ToolStatusCacheState>,
+    registry_state: tauri::State<'_, ToolRegistryState>,
 ) -> Result<Vec<ToolStatus>, String> {
-    Ok(state.cache.get_all_status().await)
+    let registry = registry_state.registry.lock().await;
+    registry
+        .get_local_tool_status()
+        .await
+        .map_err(|e| format!("检查工具状态失败: {}", e))
 }
 
-/// 刷新工具状态（清除缓存并重新检测）
+/// 刷新工具状态（重新检测并更新数据库）
+///
+/// 工作流程：
+/// 1. 重新检测所有本地工具（并行，约 1.3s）
+/// 2. 更新数据库（upsert，删除已卸载的工具）
+/// 3. 返回最新的 ToolStatus
+///
+/// 用途：用户点击"刷新"按钮、安装/卸载工具后
 #[tauri::command]
 pub async fn refresh_tool_status(
-    state: tauri::State<'_, ToolStatusCacheState>,
+    registry_state: tauri::State<'_, ToolRegistryState>,
 ) -> Result<Vec<ToolStatus>, String> {
-    // 清除缓存
-    state.cache.clear().await;
-    // 重新检测
-    Ok(state.cache.get_all_status().await)
+    let registry = registry_state.registry.lock().await;
+    registry
+        .refresh_and_get_local_status()
+        .await
+        .map_err(|e| format!("刷新工具状态失败: {}", e))
 }
 
 /// 检测 Node.js 和 npm 环境
@@ -92,7 +106,6 @@ pub async fn check_node_environment() -> Result<NodeEnvironment, String> {
 /// 安装指定工具
 #[tauri::command]
 pub async fn install_tool(
-    state: tauri::State<'_, ToolStatusCacheState>,
     tool: String,
     method: String,
     force: Option<bool>,
@@ -121,8 +134,7 @@ pub async fn install_tool(
 
     match installer.install(&tool_obj, &install_method, force).await {
         Ok(_) => {
-            // 安装成功，清除该工具的缓存
-            state.cache.clear_tool(&tool).await;
+            // 安装成功（前端会调用 refresh_tool_status 更新数据库）
 
             // 构造成功消息
             let message = match method.as_str() {
@@ -216,11 +228,7 @@ pub async fn check_all_updates() -> Result<Vec<UpdateResult>, String> {
 
 /// 更新指定工具
 #[tauri::command]
-pub async fn update_tool(
-    state: tauri::State<'_, ToolStatusCacheState>,
-    tool: String,
-    force: Option<bool>,
-) -> Result<UpdateResult, String> {
+pub async fn update_tool(tool: String, force: Option<bool>) -> Result<UpdateResult, String> {
     // 应用代理配置（如果已配置）
     apply_proxy_if_configured();
 
@@ -242,8 +250,7 @@ pub async fn update_tool(
 
     match update_result {
         Ok(Ok(_)) => {
-            // 更新成功，清除该工具的缓存
-            state.cache.clear_tool(&tool).await;
+            // 更新成功（前端会调用 refresh_tool_status 更新数据库）
 
             // 获取新版本
             let new_version = installer.get_installed_version(&tool_obj).await;

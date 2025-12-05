@@ -1008,3 +1008,30 @@ pub async fn get_profile_config(tool: String, profile: String) -> Result<ActiveC
         _ => Err(format!("暂不支持的工具: {tool}")),
     }
 }
+
+// ==================== 单实例模式配置命令 ====================
+
+/// 获取单实例模式配置状态
+#[tauri::command]
+pub async fn get_single_instance_config() -> Result<bool, String> {
+    let config = read_global_config()
+        .map_err(|e| format!("读取配置失败: {e}"))?
+        .ok_or("配置文件不存在")?;
+    Ok(config.single_instance_enabled)
+}
+
+/// 更新单实例模式配置（需要重启应用生效）
+#[tauri::command]
+pub async fn update_single_instance_config(enabled: bool) -> Result<(), String> {
+    let mut config = read_global_config()
+        .map_err(|e| format!("读取配置失败: {e}"))?
+        .ok_or("配置文件不存在")?;
+
+    config.single_instance_enabled = enabled;
+
+    write_global_config(&config).map_err(|e| format!("保存配置失败: {e}"))?;
+
+    tracing::info!(enabled = enabled, "单实例模式配置已更新（需重启生效）");
+
+    Ok(())
+}
