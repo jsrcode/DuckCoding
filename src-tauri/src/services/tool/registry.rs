@@ -1,5 +1,5 @@
-use crate::models::{SSHConfig, Tool, ToolInstance, ToolSource, ToolType};
-use crate::services::tool::{ToolInstanceDB, ToolStatusCache};
+use crate::models::{InstallMethod, SSHConfig, Tool, ToolInstance, ToolType};
+use crate::services::tool::{DetectorRegistry, ToolInstanceDB};
 use crate::utils::{CommandExecutor, WSLExecutor};
 use anyhow::Result;
 use std::collections::HashMap;
@@ -19,7 +19,7 @@ pub struct ToolDetectionProgress {
 /// 工具注册表 - 统一管理所有工具实例
 pub struct ToolRegistry {
     db: Arc<Mutex<ToolInstanceDB>>,
-    cache: Arc<ToolStatusCache>,
+    detector_registry: DetectorRegistry,
     command_executor: CommandExecutor,
     wsl_executor: WSLExecutor,
 }
@@ -28,11 +28,14 @@ impl ToolRegistry {
     /// 创建新的工具注册表
     pub async fn new() -> Result<Self> {
         let db = ToolInstanceDB::new()?;
+
+        // 初始化配置文件（如果不存在）
+        // 注意：迁移逻辑已移到 MigrationManager，这里仅初始化
         db.init_tables()?;
 
         Ok(Self {
             db: Arc::new(Mutex::new(db)),
-            cache: Arc::new(ToolStatusCache::new()),
+            detector_registry: DetectorRegistry::new(),
             command_executor: CommandExecutor::new(),
             wsl_executor: WSLExecutor::new(),
         })
@@ -81,13 +84,13 @@ impl ToolRegistry {
 
     /// 检测本地工具并持久化到数据库（并行检测，用于新手引导）
     pub async fn detect_and_persist_local_tools(&self) -> Result<Vec<ToolInstance>> {
-        let tools = Tool::all();
-        tracing::info!("开始并行检测 {} 个本地工具", tools.len());
+        let detectors = self.detector_registry.all_detectors();
+        tracing::info!("开始并行检测 {} 个本地工具", detectors.len());
 
         // 并行检测所有工具
-        let futures: Vec<_> = tools
+        let futures: Vec<_> = detectors
             .iter()
-            .map(|tool| self.detect_single_tool(tool.clone()))
+            .map(|detector| self.detect_single_tool_by_detector(detector.clone()))
             .collect();
 
         let results = futures_util::future::join_all(futures).await;
@@ -115,63 +118,70 @@ impl ToolRegistry {
         Ok(instances)
     }
 
-    /// 检测单个工具（内部使用，用于并行检测）
-    async fn detect_single_tool(&self, tool: Tool) -> ToolInstance {
-        tracing::info!(
-            "开始检测工具: {}, check_command={}",
-            tool.name,
-            tool.check_command
-        );
+    /// 使用 Detector 检测单个工具（新方法）
+    async fn detect_single_tool_by_detector(
+        &self,
+        detector: std::sync::Arc<dyn crate::services::tool::ToolDetector>,
+    ) -> ToolInstance {
+        let tool_id = detector.tool_id();
+        let tool_name = detector.tool_name();
+        tracing::debug!("检测工具: {}", tool_name);
 
-        // 检测安装状态
-        let installed = self
-            .command_executor
-            .command_exists_async(&tool.check_command)
-            .await;
+        // 使用 Detector 进行检测
+        let installed = detector.is_installed(&self.command_executor).await;
 
-        tracing::info!(
-            "工具 {} 命令存在性检测结果: installed={}",
-            tool.name,
-            installed
-        );
-
-        // 如果已安装，获取版本和路径
-        let (version, install_path) = if installed {
-            tracing::info!("工具 {} 检测到已安装，获取版本和路径", tool.name);
-            let version = self.get_local_version(&tool).await;
-            let path = self.get_local_install_path(&tool.check_command).await;
-            tracing::info!("工具 {} 版本={:?}, 路径={:?}", tool.name, version, path);
-            (version, path)
+        let (version, install_path, install_method) = if installed {
+            let version = detector.get_version(&self.command_executor).await;
+            let path = detector.get_install_path(&self.command_executor).await;
+            let method = detector.detect_install_method(&self.command_executor).await;
+            (version, path, method)
         } else {
-            tracing::warn!(
-                "工具 {} 未检测到安装 (command_exists_async 返回 false)",
-                tool.name
-            );
-            (None, None)
+            (None, None, None)
         };
 
-        tracing::info!(
-            "工具 {} 最终检测结果: installed={}, version={:?}, path={:?}",
-            tool.name,
+        tracing::debug!(
+            "工具 {} 检测结果: installed={}, version={:?}, path={:?}, method={:?}",
+            tool_name,
             installed,
             version,
-            install_path
+            install_path,
+            install_method
         );
 
-        ToolInstance::from_tool_local(&tool, installed, version, install_path)
+        // 创建 ToolInstance（需要获取 Tool 的完整信息）
+        let tool = Tool::by_id(tool_id).unwrap_or_else(|| {
+            // 如果 Tool 定义不存在，从 Detector 构建最小化 Tool
+            Tool {
+                id: tool_id.to_string(),
+                name: tool_name.to_string(),
+                group_name: format!("{} 专用分组", tool_name),
+                npm_package: detector.npm_package().to_string(),
+                check_command: detector.check_command().to_string(),
+                config_dir: detector.config_dir(),
+                config_file: detector.config_file().to_string(),
+                env_vars: crate::models::EnvVars {
+                    api_key: String::new(),
+                    base_url: String::new(),
+                },
+                use_proxy_for_version_check: detector.use_proxy_for_version_check(),
+            }
+        });
+
+        let mut instance = ToolInstance::from_tool_local(&tool, installed, version, install_path);
+        instance.install_method = install_method; // 设置检测到的安装方式
+        instance
     }
 
     /// 刷新本地工具状态（重新检测，更新存在的，删除不存在的）
     pub async fn refresh_local_tools(&self) -> Result<Vec<ToolInstance>> {
         tracing::info!("刷新本地工具状态（重新检测）");
-        self.cache.clear().await;
 
-        let tools = Tool::all();
+        let detectors = self.detector_registry.all_detectors();
 
         // 并行检测所有工具
-        let futures: Vec<_> = tools
+        let futures: Vec<_> = detectors
             .iter()
-            .map(|tool| self.detect_single_tool(tool.clone()))
+            .map(|detector| self.detect_single_tool_by_detector(detector.clone()))
             .collect();
 
         let results = futures_util::future::join_all(futures).await;
@@ -217,127 +227,6 @@ impl ToolRegistry {
 
         tracing::info!("本地工具刷新完成，共 {} 个已安装工具", instances.len());
         Ok(instances)
-    }
-
-    /// 获取本地工具版本
-    async fn get_local_version(&self, tool: &Tool) -> Option<String> {
-        let result = if tool.use_proxy_for_version_check {
-            self.command_executor
-                .execute_async(&tool.check_command)
-                .await
-        } else {
-            self.execute_without_proxy(&tool.check_command).await
-        };
-
-        if result.success {
-            self.extract_version(&result.stdout)
-        } else {
-            None
-        }
-    }
-
-    /// 执行命令但不使用代理
-    async fn execute_without_proxy(&self, command_str: &str) -> crate::utils::CommandResult {
-        use crate::utils::platform::PlatformInfo;
-        use std::process::Command;
-
-        #[cfg(target_os = "windows")]
-        use std::os::windows::process::CommandExt;
-
-        let command_str = command_str.to_string();
-        let platform = PlatformInfo::current();
-
-        tokio::task::spawn_blocking(move || {
-            let enhanced_path = platform.build_enhanced_path();
-
-            let output = if platform.is_windows {
-                #[cfg(target_os = "windows")]
-                {
-                    Command::new("cmd")
-                        .args(["/C", &command_str])
-                        .creation_flags(0x08000000)
-                        .env("PATH", &enhanced_path)
-                        .env_remove("HTTP_PROXY")
-                        .env_remove("HTTPS_PROXY")
-                        .env_remove("ALL_PROXY")
-                        .env_remove("http_proxy")
-                        .env_remove("https_proxy")
-                        .env_remove("all_proxy")
-                        .output()
-                }
-                #[cfg(not(target_os = "windows"))]
-                {
-                    Command::new("cmd")
-                        .args(["/C", &command_str])
-                        .env("PATH", &enhanced_path)
-                        .env_remove("HTTP_PROXY")
-                        .env_remove("HTTPS_PROXY")
-                        .env_remove("ALL_PROXY")
-                        .env_remove("http_proxy")
-                        .env_remove("https_proxy")
-                        .env_remove("all_proxy")
-                        .output()
-                }
-            } else {
-                Command::new("sh")
-                    .args(["-c", &command_str])
-                    .env("PATH", &enhanced_path)
-                    .env_remove("HTTP_PROXY")
-                    .env_remove("HTTPS_PROXY")
-                    .env_remove("ALL_PROXY")
-                    .env_remove("http_proxy")
-                    .env_remove("https_proxy")
-                    .env_remove("all_proxy")
-                    .output()
-            };
-
-            match output {
-                Ok(output) => crate::utils::CommandResult {
-                    success: output.status.success(),
-                    stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-                    stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-                    exit_code: output.status.code(),
-                },
-                Err(e) => crate::utils::CommandResult {
-                    success: false,
-                    stdout: String::new(),
-                    stderr: e.to_string(),
-                    exit_code: None,
-                },
-            }
-        })
-        .await
-        .unwrap_or_else(|_| crate::utils::CommandResult {
-            success: false,
-            stdout: String::new(),
-            stderr: "执行失败".to_string(),
-            exit_code: None,
-        })
-    }
-
-    /// 获取本地工具安装路径
-    async fn get_local_install_path(&self, command: &str) -> Option<String> {
-        let cmd_name = command.split_whitespace().next()?;
-
-        #[cfg(target_os = "windows")]
-        let which_cmd = format!("where {}", cmd_name);
-        #[cfg(not(target_os = "windows"))]
-        let which_cmd = format!("which {}", cmd_name);
-
-        let result = self.command_executor.execute_async(&which_cmd).await;
-        if result.success {
-            let path = result.stdout.lines().next()?.trim();
-            if !path.is_empty() {
-                return Some(path.to_string());
-            }
-        }
-        None
-    }
-
-    /// 从输出中提取版本号
-    fn extract_version(&self, output: &str) -> Option<String> {
-        let re = regex::Regex::new(r"v?(\d+\.\d+\.\d+(?:-[\w.]+)?)").ok()?;
-        re.captures(output)?.get(1).map(|m| m.as_str().to_string())
     }
 
     /// 添加WSL工具实例
@@ -441,63 +330,123 @@ impl ToolRegistry {
 
     /// 刷新所有工具实例（重新检测本地工具并更新数据库）
     pub async fn refresh_all(&self) -> Result<HashMap<String, Vec<ToolInstance>>> {
-        // 清除缓存
-        self.cache.clear().await;
-
-        // 重新检测本地工具，更新已有实例的状态
-        let tools = Tool::all();
-        tracing::info!("刷新所有工具实例，共 {} 个工具", tools.len());
-
-        // 并行检测所有工具
-        let futures: Vec<_> = tools
-            .iter()
-            .map(|tool| self.detect_single_tool(tool.clone()))
-            .collect();
-
-        let results = futures_util::future::join_all(futures).await;
-
-        // 更新数据库中的实例状态
-        let db = self.db.lock().await;
-        for instance in results {
-            tracing::info!(
-                "工具 {} (ID: {}) 检测结果: installed={}, version={:?}, path={:?}",
-                instance.tool_name,
-                instance.instance_id,
-                instance.installed,
-                instance.version,
-                instance.install_path
-            );
-            // 使用 upsert 更新或插入实例（包括更新 installed 状态）
-            if let Err(e) = db.upsert_instance(&instance) {
-                tracing::warn!("更新工具实例失败: {}", e);
-            } else {
-                tracing::info!(
-                    "工具 {} (ID: {}) 更新到数据库成功",
-                    instance.tool_name,
-                    instance.instance_id
-                );
-            }
-        }
-        drop(db);
-
-        tracing::info!("工具实例刷新完成");
+        // 重新检测本地工具并保存
+        self.detect_and_persist_local_tools().await?;
 
         // 返回所有工具实例
         self.get_all_grouped().await
     }
 
-    /// 检测工具来源（用于前端显示）
-    pub async fn detect_sources(&self) -> Result<HashMap<String, ToolSource>> {
-        let mut sources = HashMap::new();
+    /// 检测工具的安装方式（用于更新时选择正确的方法）
+    pub async fn detect_install_methods(&self) -> Result<HashMap<String, InstallMethod>> {
+        let mut methods = HashMap::new();
 
-        let tools = Tool::all();
-        for tool in tools {
-            if let Some(path) = self.get_local_install_path(&tool.check_command).await {
-                let source = ToolSource::from_install_path(&path);
-                sources.insert(tool.id.clone(), source);
+        let detectors = self.detector_registry.all_detectors();
+        for detector in detectors {
+            let tool_id = detector.tool_id();
+            if let Some(method) = detector.detect_install_method(&self.command_executor).await {
+                methods.insert(tool_id.to_string(), method);
             }
         }
 
-        Ok(sources)
+        Ok(methods)
+    }
+
+    /// 获取本地工具的轻量级状态（供 Dashboard 使用）
+    /// 优先从数据库读取，如果数据库为空则执行检测并持久化
+    pub async fn get_local_tool_status(&self) -> Result<Vec<crate::models::ToolStatus>> {
+        tracing::debug!("获取本地工具轻量级状态");
+
+        // 检查数据库是否有本地工具数据
+        let has_data = self.has_local_tools_in_db().await?;
+
+        if !has_data {
+            tracing::info!("数据库为空，执行首次检测并持久化");
+            // 首次检测并保存到数据库
+            self.detect_and_persist_local_tools().await?;
+        }
+
+        // 从数据库读取所有实例
+        let grouped = self.get_all_grouped().await?;
+
+        // 转换为轻量级 ToolStatus
+        let mut statuses = Vec::new();
+        let detectors = self.detector_registry.all_detectors();
+
+        for detector in detectors {
+            let tool_id = detector.tool_id();
+            let tool_name = detector.tool_name();
+
+            if let Some(instances) = grouped.get(tool_id) {
+                // 找到 Local 类型的实例
+                if let Some(local_instance) = instances
+                    .iter()
+                    .find(|i| i.tool_type == crate::models::ToolType::Local)
+                {
+                    statuses.push(crate::models::ToolStatus {
+                        id: tool_id.to_string(),
+                        name: tool_name.to_string(),
+                        installed: local_instance.installed,
+                        version: local_instance.version.clone(),
+                    });
+                } else {
+                    // 没有本地实例，返回未安装状态
+                    statuses.push(crate::models::ToolStatus {
+                        id: tool_id.to_string(),
+                        name: tool_name.to_string(),
+                        installed: false,
+                        version: None,
+                    });
+                }
+            } else {
+                // 数据库中没有该工具的任何实例
+                statuses.push(crate::models::ToolStatus {
+                    id: tool_id.to_string(),
+                    name: tool_name.to_string(),
+                    installed: false,
+                    version: None,
+                });
+            }
+        }
+
+        tracing::debug!("获取本地工具状态完成，共 {} 个工具", statuses.len());
+        Ok(statuses)
+    }
+
+    /// 刷新本地工具状态并返回轻量级视图（供刷新按钮使用）
+    /// 重新检测 → 更新数据库 → 返回 ToolStatus
+    pub async fn refresh_and_get_local_status(&self) -> Result<Vec<crate::models::ToolStatus>> {
+        tracing::info!("刷新本地工具状态（重新检测）");
+
+        // 重新检测本地工具
+        let instances = self.refresh_local_tools().await?;
+
+        // 转换为轻量级状态
+        let mut statuses = Vec::new();
+        let detectors = self.detector_registry.all_detectors();
+
+        for detector in detectors {
+            let tool_id = detector.tool_id();
+            let tool_name = detector.tool_name();
+
+            if let Some(instance) = instances.iter().find(|i| i.base_id == tool_id) {
+                statuses.push(crate::models::ToolStatus {
+                    id: tool_id.to_string(),
+                    name: tool_name.to_string(),
+                    installed: instance.installed,
+                    version: instance.version.clone(),
+                });
+            } else {
+                statuses.push(crate::models::ToolStatus {
+                    id: tool_id.to_string(),
+                    name: tool_name.to_string(),
+                    installed: false,
+                    version: None,
+                });
+            }
+        }
+
+        tracing::info!("刷新完成，共 {} 个已安装工具", instances.len());
+        Ok(statuses)
     }
 }

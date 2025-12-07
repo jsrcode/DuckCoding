@@ -6,9 +6,9 @@ import { PageContainer } from '@/components/layout/PageContainer';
 import { useToast } from '@/hooks/use-toast';
 import { useSettingsForm } from './hooks/useSettingsForm';
 import { BasicSettingsTab } from './components/BasicSettingsTab';
+import { ApplicationSettingsTab } from './components/ApplicationSettingsTab';
 import { ProxySettingsTab } from './components/ProxySettingsTab';
 import { LogSettingsTab } from './components/LogSettingsTab';
-import { TransparentProxyMigrationNotice } from './components/TransparentProxyMigrationNotice';
 import { AboutTab } from './components/AboutTab';
 import { ConfigManagementTab } from './components/ConfigManagementTab';
 import type { GlobalConfig, UpdateInfo } from '@/lib/tauri-commands';
@@ -168,6 +168,12 @@ export function SettingsPage({
             基本设置
           </TabsTrigger>
           <TabsTrigger
+            value="application"
+            disabled={!!restrictToTab && restrictToTab !== 'application'}
+          >
+            应用设置
+          </TabsTrigger>
+          <TabsTrigger
             value="config-management"
             disabled={!!restrictToTab && restrictToTab !== 'config-management'}
           >
@@ -178,12 +184,6 @@ export function SettingsPage({
           </TabsTrigger>
           <TabsTrigger value="log" disabled={!!restrictToTab && restrictToTab !== 'log'}>
             日志配置
-          </TabsTrigger>
-          <TabsTrigger
-            value="experimental"
-            disabled={!!restrictToTab && restrictToTab !== 'experimental'}
-          >
-            透明代理
           </TabsTrigger>
           <TabsTrigger value="about" disabled={!!restrictToTab && restrictToTab !== 'about'}>
             关于
@@ -198,6 +198,11 @@ export function SettingsPage({
             systemToken={systemToken}
             setSystemToken={setSystemToken}
           />
+        </TabsContent>
+
+        {/* 应用设置 */}
+        <TabsContent value="application" className="space-y-6">
+          <ApplicationSettingsTab />
         </TabsContent>
 
         {/* 代理设置 */}
@@ -232,11 +237,6 @@ export function SettingsPage({
         {/* 配置管理 */}
         <TabsContent value="config-management" className="space-y-6">
           <ConfigManagementTab />
-        </TabsContent>
-
-        {/* 透明代理 (迁移提示) */}
-        <TabsContent value="experimental" className="space-y-6">
-          <TransparentProxyMigrationNotice />
         </TabsContent>
 
         {/* 关于 */}

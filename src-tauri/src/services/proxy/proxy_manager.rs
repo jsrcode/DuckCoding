@@ -12,7 +12,7 @@ use tokio::sync::RwLock;
 
 use super::headers::create_request_processor;
 use super::proxy_instance::ProxyInstance;
-use crate::models::ToolProxyConfig;
+use crate::models::proxy_config::ToolProxyConfig;
 
 /// 代理管理器
 pub struct ProxyManager {

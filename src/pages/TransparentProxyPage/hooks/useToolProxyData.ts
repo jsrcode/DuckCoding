@@ -2,12 +2,7 @@
 // 统一管理三个工具的配置和状态数据
 
 import { useState, useEffect, useCallback } from 'react';
-import {
-  getGlobalConfig,
-  saveGlobalConfig,
-  type GlobalConfig,
-  type ToolProxyConfig,
-} from '@/lib/tauri-commands';
+import { getProxyConfig, updateProxyConfig, type ToolProxyConfig } from '@/lib/tauri-commands';
 import type { ToolId } from '../types/proxy-history';
 import { useProxyControl } from './useProxyControl';
 
@@ -25,45 +20,61 @@ export interface ToolData {
  * 工具代理数据管理 Hook
  *
  * 功能：
- * - 从 GlobalConfig.proxy_configs 读取配置
+ * - 从 ProxyConfigManager 读取配置（proxy.json）
  * - 从代理状态中读取运行信息
  * - 提供统一的数据访问接口（工厂模式）
  */
 export function useToolProxyData() {
-  const [globalConfig, setGlobalConfig] = useState<GlobalConfig | null>(null);
+  const [configs, setConfigs] = useState<Map<ToolId, ToolProxyConfig | null>>(new Map());
   const [configLoading, setConfigLoading] = useState(true);
 
   // 使用代理控制 Hook
   const { proxyStatus, isRunning, getPort, refreshProxyStatus } = useProxyControl();
 
   /**
-   * 加载全局配置
+   * 加载指定工具的配置
    */
-  const loadGlobalConfig = useCallback(async () => {
+  const loadToolConfig = useCallback(async (toolId: ToolId) => {
+    try {
+      const config = await getProxyConfig(toolId);
+      setConfigs((prev) => new Map(prev).set(toolId, config));
+      return config;
+    } catch (error) {
+      console.error(`加载 ${toolId} 配置失败:`, error);
+      setConfigs((prev) => new Map(prev).set(toolId, null));
+      return null;
+    }
+  }, []);
+
+  /**
+   * 加载所有工具配置
+   */
+  const loadAllConfigs = useCallback(async () => {
     setConfigLoading(true);
     try {
-      const config = await getGlobalConfig();
-      setGlobalConfig(config);
-    } catch (error) {
-      console.error('加载全局配置失败:', error);
+      await Promise.all([
+        loadToolConfig('claude-code'),
+        loadToolConfig('codex'),
+        loadToolConfig('gemini-cli'),
+      ]);
     } finally {
       setConfigLoading(false);
     }
-  }, []);
+  }, [loadToolConfig]);
 
   /**
    * 刷新数据（配置 + 状态）
    */
   const refreshData = useCallback(async () => {
-    await Promise.all([loadGlobalConfig(), refreshProxyStatus()]);
-  }, [loadGlobalConfig, refreshProxyStatus]);
+    await Promise.all([loadAllConfigs(), refreshProxyStatus()]);
+  }, [loadAllConfigs, refreshProxyStatus]);
 
   /**
    * 获取指定工具的完整数据（工厂方法）
    */
   const getToolData = useCallback(
     (toolId: ToolId): ToolData => {
-      const config = globalConfig?.proxy_configs?.[toolId] || null;
+      const config = configs.get(toolId) || null;
       const running = isRunning(toolId);
       const port = getPort(toolId);
 
@@ -74,7 +85,7 @@ export function useToolProxyData() {
         port,
       };
     },
-    [globalConfig, isRunning, getPort],
+    [configs, isRunning, getPort],
   );
 
   /**
@@ -90,13 +101,9 @@ export function useToolProxyData() {
    */
   const saveToolConfig = useCallback(
     async (toolId: ToolId, updates: Partial<ToolProxyConfig>): Promise<void> => {
-      if (!globalConfig) {
-        throw new Error('全局配置未加载');
-      }
-
-      const currentConfig = globalConfig.proxy_configs?.[toolId] || {
+      const currentConfig = configs.get(toolId) || {
         enabled: false,
-        port: 8787,
+        port: toolId === 'claude-code' ? 8787 : toolId === 'codex' ? 8788 : 8789,
         local_api_key: null,
         real_api_key: null,
         real_base_url: null,
@@ -112,34 +119,25 @@ export function useToolProxyData() {
         ...updates,
       };
 
-      const configToSave: GlobalConfig = {
-        ...globalConfig,
-        proxy_configs: {
-          ...globalConfig.proxy_configs,
-          [toolId]: updatedConfig,
-        },
-      };
-
-      await saveGlobalConfig(configToSave);
-      setGlobalConfig(configToSave);
+      await updateProxyConfig(toolId, updatedConfig);
+      setConfigs((prev) => new Map(prev).set(toolId, updatedConfig));
     },
-    [globalConfig],
+    [configs],
   );
 
   // 初始加载
   useEffect(() => {
-    loadGlobalConfig();
-  }, [loadGlobalConfig]);
+    loadAllConfigs();
+  }, [loadAllConfigs]);
 
   return {
-    globalConfig,
     configLoading,
     proxyStatus,
     getToolData,
     getAllToolsData,
     saveToolConfig,
     refreshData,
-    loadGlobalConfig,
+    loadGlobalConfig: loadAllConfigs,
     refreshProxyStatus,
   };
 }

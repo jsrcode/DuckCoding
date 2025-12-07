@@ -1,5 +1,6 @@
 use crate::models::Tool;
-use crate::services::InstallerService;
+use crate::services::tool::DetectorRegistry;
+use crate::utils::CommandExecutor;
 use anyhow::Result;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -64,31 +65,46 @@ struct ToolVersionFromMirror {
 
 /// 版本服务
 pub struct VersionService {
-    installer: InstallerService,
+    detector_registry: DetectorRegistry,
+    command_executor: CommandExecutor,
     mirror_api_url: String,
 }
 
 impl VersionService {
     pub fn new() -> Self {
         VersionService {
-            installer: InstallerService::new(),
+            detector_registry: DetectorRegistry::new(),
+            command_executor: CommandExecutor::new(),
             mirror_api_url: "https://mirror.duckcoding.com/api/v1/tools".to_string(),
         }
     }
 
     pub fn with_mirror_url(mirror_url: String) -> Self {
         VersionService {
-            installer: InstallerService::new(),
+            detector_registry: DetectorRegistry::new(),
+            command_executor: CommandExecutor::new(),
             mirror_api_url: mirror_url,
         }
     }
 
-    /// 检查工具版本（优先使用镜像站 API）
+    /// 检查工具版本（新架构：使用 tool_id）
     pub async fn check_version(&self, tool: &Tool) -> Result<VersionInfo> {
-        let installed_version = self.installer.get_installed_version(tool).await;
+        self.check_version_by_id(&tool.id).await
+    }
+
+    /// 检查工具版本（通过 tool_id）
+    pub async fn check_version_by_id(&self, tool_id: &str) -> Result<VersionInfo> {
+        // 获取 Detector
+        let detector = self
+            .detector_registry
+            .get(tool_id)
+            .ok_or_else(|| anyhow::anyhow!("未知的工具 ID: {}", tool_id))?;
+
+        // 使用 Detector 获取已安装版本
+        let installed_version = detector.get_version(&self.command_executor).await;
 
         // 1. 尝试从镜像站获取最新版本
-        match self.get_latest_from_mirror(&tool.id).await {
+        match self.get_latest_from_mirror(tool_id).await {
             Ok((latest_version, mirror_version, mirror_is_stale)) => {
                 // 使用镜像版本判断是否有更新（因为这是实际能安装的版本）
                 let version_to_compare = mirror_version.as_ref().unwrap_or(&latest_version);
@@ -96,7 +112,7 @@ impl VersionService {
                     Self::compare_versions(installed_version.as_deref(), version_to_compare);
 
                 return Ok(VersionInfo {
-                    tool_id: tool.id.clone(),
+                    tool_id: tool_id.to_string(),
                     installed_version,
                     latest_version: Some(latest_version),
                     mirror_version,
@@ -110,17 +126,14 @@ impl VersionService {
             }
         }
 
-        // 2. 回退到本地命令检查
-        let latest_version = self.get_latest_from_local(tool).await?;
-        let has_update = Self::compare_versions(installed_version.as_deref(), &latest_version);
-
+        // 2. 回退：无法获取远程版本，仅返回本地版本
         Ok(VersionInfo {
-            tool_id: tool.id.clone(),
-            installed_version,
-            latest_version: Some(latest_version.clone()),
-            mirror_version: None,   // 本地检查没有镜像版本信息
-            mirror_is_stale: false, // 本地检查无法判断镜像状态
-            has_update,
+            tool_id: tool_id.to_string(),
+            installed_version: installed_version.clone(),
+            latest_version: installed_version,
+            mirror_version: None,
+            mirror_is_stale: false,
+            has_update: false,
             source: VersionSource::MirrorFallback,
         })
     }
@@ -152,19 +165,6 @@ impl VersionService {
                 )
             })
             .ok_or_else(|| anyhow::anyhow!("工具 {tool_id} 不在镜像站 API 中"))
-    }
-
-    /// 从本地命令获取最新版本（npm registry）
-    async fn get_latest_from_local(&self, tool: &Tool) -> Result<String> {
-        // 使用 npm view 获取最新版本
-        let command = format!("npm view {} version", tool.npm_package);
-        let result = self.installer.executor.execute_async(&command).await;
-
-        if result.success {
-            Ok(result.stdout.trim().to_string())
-        } else {
-            anyhow::bail!("无法获取最新版本: {}", result.stderr)
-        }
     }
 
     /// 比较版本号
@@ -219,11 +219,11 @@ impl VersionService {
 
     /// 批量检查所有工具（优化：单次 API 请求）
     pub async fn check_all_tools(&self) -> Vec<VersionInfo> {
-        let tools = Tool::all();
+        let detectors = self.detector_registry.all_detectors();
         let mut results = Vec::new();
 
         #[cfg(debug_assertions)]
-        tracing::debug!(tool_count = tools.len(), "开始批量检查工具");
+        tracing::debug!(tool_count = detectors.len(), "开始批量检查工具");
 
         // 1. 尝试一次性从镜像站获取所有工具版本
         match self.get_all_from_mirror().await {
@@ -232,11 +232,12 @@ impl VersionService {
                 tracing::debug!("镜像站数据获取成功");
 
                 // 成功获取镜像站数据，为每个工具构建 VersionInfo
-                for tool in &tools {
-                    let installed_version = self.installer.get_installed_version(tool).await;
+                for detector in &detectors {
+                    let tool_id = detector.tool_id();
+                    let installed_version = detector.get_version(&self.command_executor).await;
 
                     // 从镜像站数据中查找该工具
-                    if let Some(mirror_tool) = mirror_data.tools.iter().find(|t| t.id == tool.id) {
+                    if let Some(mirror_tool) = mirror_data.tools.iter().find(|t| t.id == tool_id) {
                         // 使用镜像版本判断是否有更新（这是实际能安装的版本）
                         let version_to_compare = mirror_tool
                             .mirror_version
@@ -252,7 +253,7 @@ impl VersionService {
 
                         #[cfg(debug_assertions)]
                         tracing::debug!(
-                            tool_id = %tool.id,
+                            tool_id = %tool_id,
                             installed_version = ?installed_version,
                             latest_version = %mirror_tool.latest_version,
                             mirror_version = ?mirror_tool.mirror_version,
@@ -262,7 +263,7 @@ impl VersionService {
                         );
 
                         results.push(VersionInfo {
-                            tool_id: tool.id.clone(),
+                            tool_id: tool_id.to_string(),
                             installed_version,
                             latest_version: Some(mirror_tool.latest_version.clone()),
                             mirror_version: mirror_tool.mirror_version.clone(),
@@ -271,21 +272,34 @@ impl VersionService {
                             source: VersionSource::Mirror,
                         });
                     } else {
-                        // 镜像站没有该工具数据，回退到本地检查
-                        if let Ok(info) = self.check_version_local(tool, installed_version).await {
-                            results.push(info);
-                        }
+                        // 镜像站没有该工具数据，返回本地版本
+                        results.push(VersionInfo {
+                            tool_id: tool_id.to_string(),
+                            installed_version: installed_version.clone(),
+                            latest_version: installed_version,
+                            mirror_version: None,
+                            mirror_is_stale: false,
+                            has_update: false,
+                            source: VersionSource::MirrorFallback,
+                        });
                     }
                 }
             }
             Err(e) => {
-                // 镜像站不可用，逐个回退到本地检查（跳过镜像重试）
+                // 镜像站不可用，回退到仅本地版本（无法判断是否有更新）
                 tracing::warn!(error = ?e, "镜像站 API 不可用，回退到本地检查");
-                for tool in &tools {
-                    let installed_version = self.installer.get_installed_version(tool).await;
-                    if let Ok(info) = self.check_version_local(tool, installed_version).await {
-                        results.push(info);
-                    }
+                for detector in &detectors {
+                    let tool_id = detector.tool_id();
+                    let installed_version = detector.get_version(&self.command_executor).await;
+                    results.push(VersionInfo {
+                        tool_id: tool_id.to_string(),
+                        installed_version: installed_version.clone(),
+                        latest_version: installed_version,
+                        mirror_version: None,
+                        mirror_is_stale: false,
+                        has_update: false,
+                        source: VersionSource::MirrorFallback,
+                    });
                 }
             }
         }
@@ -294,26 +308,6 @@ impl VersionService {
         tracing::debug!(result_count = results.len(), "批量检查完成");
 
         results
-    }
-
-    /// 本地版本检查（内部辅助方法）
-    async fn check_version_local(
-        &self,
-        tool: &Tool,
-        installed_version: Option<String>,
-    ) -> Result<VersionInfo> {
-        let latest_version = self.get_latest_from_local(tool).await?;
-        let has_update = Self::compare_versions(installed_version.as_deref(), &latest_version);
-
-        Ok(VersionInfo {
-            tool_id: tool.id.clone(),
-            installed_version,
-            latest_version: Some(latest_version),
-            mirror_version: None,   // 本地检查没有镜像版本信息
-            mirror_is_stale: false, // 本地检查无法判断镜像状态
-            has_update,
-            source: VersionSource::MirrorFallback,
-        })
     }
 }
 

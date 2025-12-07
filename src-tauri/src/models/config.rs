@@ -128,6 +128,10 @@ impl Default for ToolProxyConfig {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct GlobalConfig {
+    /// 配置文件版本（用于迁移管理）
+    /// 默认值为 "0.0.0"，迁移后更新为对应的应用版本号
+    #[serde(default)]
+    pub version: Option<String>,
     pub user_id: String,
     pub system_token: String,
     #[serde(default)]
@@ -183,6 +187,9 @@ pub struct GlobalConfig {
     /// 外部改动轮询间隔（毫秒），用于前端补偿刷新
     #[serde(default = "default_external_poll_interval_ms")]
     pub external_poll_interval_ms: u64,
+    /// 单实例模式开关（默认启用，仅生产环境生效）
+    #[serde(default = "default_single_instance_enabled")]
+    pub single_instance_enabled: bool,
 }
 
 fn default_transparent_proxy_port() -> u16 {
@@ -295,4 +302,8 @@ fn default_external_watch_enabled() -> bool {
 
 fn default_external_poll_interval_ms() -> u64 {
     5000
+}
+
+fn default_single_instance_enabled() -> bool {
+    true
 }

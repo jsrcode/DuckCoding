@@ -1,6 +1,7 @@
 // lib.rs - 暴露服务层给 CLI 和 GUI 使用
 
 pub mod core; // 🆕 核心基础设施层
+pub mod data; // 🆕 统一数据管理层
 pub mod http_client;
 pub mod models;
 pub mod services;
@@ -18,8 +19,15 @@ pub use services::transparent_proxy::{ProxyConfig, TransparentProxyService};
 pub use services::transparent_proxy_config::TransparentProxyConfigService;
 pub use services::update::UpdateService;
 pub use services::version::VersionService;
-// Re-export tool status cache and tool registry
-pub use services::tool::{ToolRegistry, ToolStatusCache};
+// Re-export tool registry (unified tool management)
+pub use services::tool::ToolRegistry;
+// Re-export migration manager
+pub use services::migration_manager::{create_migration_manager, MigrationManager};
+// Re-export profile manager (v2.1)
+pub use services::profile_manager::{
+    ActiveStore, ClaudeProfile, CodexProfile, GeminiProfile, ProfileDescriptor, ProfileManager,
+    ProfilesStore,
+};
 // Re-export new proxy architecture types
 pub use models::ToolProxyConfig;
 pub use services::proxy::{ProxyInstance, ProxyManager, RequestProcessor};
@@ -63,18 +71,22 @@ pub use ui::{
 ///
 /// 条件：`enabled: true` 且 `auto_start: true`
 pub async fn auto_start_proxies(manager: &ProxyManager) {
-    use utils::config::read_global_config;
+    use services::proxy_config_manager::ProxyConfigManager;
 
     tracing::info!("检查透明代理自启动配置");
 
-    let config = match read_global_config() {
-        Ok(Some(cfg)) => cfg,
-        Ok(None) => {
-            tracing::debug!("未找到全局配置，跳过自启动");
+    let proxy_mgr = match ProxyConfigManager::new() {
+        Ok(mgr) => mgr,
+        Err(e) => {
+            tracing::error!(error = ?e, "创建 ProxyConfigManager 失败");
             return;
         }
+    };
+
+    let proxy_store = match proxy_mgr.load_proxy_store() {
+        Ok(store) => store,
         Err(e) => {
-            tracing::error!(error = ?e, "读取配置失败");
+            tracing::error!(error = ?e, "读取代理配置失败");
             return;
         }
     };
@@ -82,36 +94,31 @@ pub async fn auto_start_proxies(manager: &ProxyManager) {
     let mut started_count = 0;
     let mut failed_count = 0;
 
-    for (tool_id, tool_config) in &config.proxy_configs {
-        // 检查是否满足自启动条件
+    for tool_id in &["claude-code", "codex", "gemini-cli"] {
+        let tool_config = match proxy_store.get_config(tool_id) {
+            Some(cfg) => cfg.clone(),
+            None => continue,
+        };
+
         if !tool_config.enabled || !tool_config.auto_start {
             continue;
         }
 
-        // 检查是否有保护密钥
         if tool_config.local_api_key.is_none() {
             tracing::warn!(tool_id = %tool_id, "未配置保护密钥，跳过自启动");
             continue;
         }
 
-        tracing::info!(
-            tool_id = %tool_id,
-            port = tool_config.port,
-            "自动启动代理"
-        );
+        tracing::info!(tool_id = %tool_id, port = tool_config.port, "自动启动代理");
 
-        match manager.start_proxy(tool_id, tool_config.clone()).await {
+        match manager.start_proxy(tool_id, tool_config).await {
             Ok(_) => {
                 started_count += 1;
                 tracing::info!(tool_id = %tool_id, "代理启动成功");
             }
             Err(e) => {
                 failed_count += 1;
-                tracing::error!(
-                    tool_id = %tool_id,
-                    error = ?e,
-                    "代理启动失败"
-                );
+                tracing::error!(tool_id = %tool_id, error = ?e, "代理启动失败");
             }
         }
     }

@@ -1,9 +1,10 @@
 import { useState, useCallback } from 'react';
 import {
-  listProfiles,
-  getActiveConfig,
+  pmListToolProfiles,
+  pmGetActiveProfile,
   type ToolStatus,
-  type ActiveConfig,
+  type ProfileData,
+  type ToolId,
 } from '@/lib/tauri-commands';
 
 /**
@@ -22,27 +23,27 @@ export function useProfileLoader(
   profileTransform?: (toolId: string, profiles: string[]) => string[],
 ) {
   const [profiles, setProfiles] = useState<Record<string, string[]>>({});
-  const [activeConfigs, setActiveConfigs] = useState<Record<string, ActiveConfig>>({});
+  const [activeProfiles, setActiveProfiles] = useState<Record<string, ProfileData | null>>({});
 
   /**
    * 并行加载所有工具的配置（即便未检测到二进制也尝试读取配置目录）
    */
   const loadAllProfiles = useCallback(async () => {
     const profileData: Record<string, string[]> = {};
-    const configData: Record<string, ActiveConfig> = {};
+    const activeData: Record<string, ProfileData | null> = {};
 
     // 并行加载所有工具的配置，提升性能
     const results = await Promise.allSettled(
       tools.flatMap((tool) => [
-        listProfiles(tool.id).then((profiles) => ({
+        pmListToolProfiles(tool.id as ToolId).then((profiles) => ({
           tool,
           type: 'profiles' as const,
           data: profileTransform ? profileTransform(tool.id, profiles) : profiles,
         })),
-        getActiveConfig(tool.id).then((config) => ({
+        pmGetActiveProfile(tool.id as ToolId).then((profile) => ({
           tool,
-          type: 'config' as const,
-          data: config,
+          type: 'active' as const,
+          data: profile,
         })),
       ]),
     );
@@ -54,7 +55,7 @@ export function useProfileLoader(
         if (type === 'profiles') {
           profileData[tool.id] = data as string[];
         } else {
-          configData[tool.id] = data as ActiveConfig;
+          activeData[tool.id] = data as ProfileData | null;
         }
       } else {
         console.error('Failed to load config:', result.reason);
@@ -66,21 +67,21 @@ export function useProfileLoader(
       if (!profileData[tool.id]) {
         profileData[tool.id] = [];
       }
-      if (!configData[tool.id]) {
-        configData[tool.id] = { api_key: '未配置', base_url: '未配置' };
+      if (!(tool.id in activeData)) {
+        activeData[tool.id] = null;
       }
     });
 
     setProfiles(profileData);
-    setActiveConfigs(configData);
-    return { profiles: profileData, activeConfigs: configData };
+    setActiveProfiles(activeData);
+    return { profiles: profileData, activeProfiles: activeData };
   }, [tools, profileTransform]);
 
   return {
     profiles,
     setProfiles,
-    activeConfigs,
-    setActiveConfigs,
+    activeProfiles,
+    setActiveProfiles,
     loadAllProfiles,
   };
 }

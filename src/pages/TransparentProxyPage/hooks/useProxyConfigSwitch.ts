@@ -2,15 +2,15 @@
 // 用于透明代理开关框内的配置切换功能
 
 import { useState, useCallback } from 'react';
-import { listProfiles, switchProfile } from '@/lib/tauri-commands';
+import { pmListToolProfiles, updateProxyFromProfile } from '@/lib/tauri-commands';
 import type { ToolId } from '../types/proxy-history';
 
 /**
  * 代理配置切换 Hook
  *
  * 功能：
- * - 加载指定工具的配置列表
- * - 切换配置（复用后端 switch_profile 命令）
+ * - 加载指定工具的配置列表（使用新的 ProfileManager API）
+ * - 切换配置（直接更新代理配置，不激活 Profile）
  */
 export function useProxyConfigSwitch(toolId: ToolId) {
   const [profiles, setProfiles] = useState<string[]>([]);
@@ -21,7 +21,7 @@ export function useProxyConfigSwitch(toolId: ToolId) {
    */
   const loadProfiles = useCallback(async () => {
     try {
-      const profileList = await listProfiles(toolId);
+      const profileList = await pmListToolProfiles(toolId);
       setProfiles(profileList);
     } catch (error) {
       console.error('Failed to load profiles:', error);
@@ -30,15 +30,15 @@ export function useProxyConfigSwitch(toolId: ToolId) {
   }, [toolId]);
 
   /**
-   * 切换配置
-   * @param profile - 配置名称
+   * 切换配置（仅更新代理的 real_* 字段，不激活 Profile）
+   * @param profileName - 配置名称
    * @returns 操作结果
    */
   const switchConfig = useCallback(
-    async (profile: string): Promise<{ success: boolean; error?: string }> => {
+    async (profileName: string): Promise<{ success: boolean; error?: string }> => {
       setLoading(true);
       try {
-        await switchProfile(toolId, profile);
+        await updateProxyFromProfile(toolId, profileName);
         return { success: true };
       } catch (error) {
         return { success: false, error: String(error) };

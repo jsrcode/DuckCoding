@@ -2,6 +2,7 @@ pub mod balance_commands;
 pub mod config_commands;
 pub mod log_commands;
 pub mod onboarding;
+pub mod profile_commands; // Profile 管理命令（v2.0）
 pub mod proxy_commands;
 pub mod session_commands;
 pub mod stats_commands;
@@ -17,6 +18,7 @@ pub use balance_commands::*;
 pub use config_commands::*;
 pub use log_commands::*;
 pub use onboarding::*;
+pub use profile_commands::*; // Profile 管理命令（v2.0）
 pub use proxy_commands::*;
 pub use session_commands::*;
 pub use stats_commands::*;

@@ -218,43 +218,6 @@ impl ToolType {
     }
 }
 
-/// 工具安装来源
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum ToolSource {
-    /// DuckCoding 管理（安装在 ~/.duckcoding/tool/bin/）
-    DuckCodingManaged,
-    /// 外部安装（npm、官方脚本等）
-    External,
-}
-
-impl ToolSource {
-    /// 转换为字符串（用于数据库存储）
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            ToolSource::DuckCodingManaged => "DuckCodingManaged",
-            ToolSource::External => "External",
-        }
-    }
-
-    /// 从字符串解析（避免与 std::str::FromStr 混淆）
-    pub fn parse(s: &str) -> Option<Self> {
-        match s {
-            "DuckCodingManaged" => Some(ToolSource::DuckCodingManaged),
-            "External" => Some(ToolSource::External),
-            _ => None,
-        }
-    }
-
-    /// 根据安装路径判断来源
-    pub fn from_install_path(path: &str) -> Self {
-        if path.contains("/.duckcoding/tool/bin/") || path.contains("\\.duckcoding\\tool\\bin\\") {
-            ToolSource::DuckCodingManaged
-        } else {
-            ToolSource::External
-        }
-    }
-}
-
 /// SSH 连接配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SSHConfig {
@@ -281,8 +244,8 @@ pub struct ToolInstance {
     pub tool_name: String,
     /// 环境类型
     pub tool_type: ToolType,
-    /// 安装来源
-    pub tool_source: ToolSource,
+    /// 安装方式（npm, brew, official）- 用于自动选择更新方法
+    pub install_method: Option<InstallMethod>,
     /// 是否已安装
     pub installed: bool,
     /// 版本号
@@ -310,17 +273,13 @@ impl ToolInstance {
         install_path: Option<String>,
     ) -> Self {
         let now = chrono::Utc::now().timestamp();
-        let tool_source = install_path
-            .as_ref()
-            .map(|p| ToolSource::from_install_path(p))
-            .unwrap_or(ToolSource::External);
 
         ToolInstance {
             instance_id: format!("{}-local", tool.id),
             base_id: tool.id.clone(),
             tool_name: tool.name.clone(),
             tool_type: ToolType::Local,
-            tool_source,
+            install_method: None, // 需要后续检测
             installed,
             version,
             install_path,
@@ -342,10 +301,6 @@ impl ToolInstance {
         install_path: Option<String>,
     ) -> Self {
         let now = chrono::Utc::now().timestamp();
-        let tool_source = install_path
-            .as_ref()
-            .map(|p| ToolSource::from_install_path(p))
-            .unwrap_or(ToolSource::External);
 
         // instance_id 格式: {base_id}-wsl-{distro_name}
         let sanitized_distro = distro_name.to_lowercase().replace(' ', "-");
@@ -355,7 +310,7 @@ impl ToolInstance {
             base_id,
             tool_name,
             tool_type: ToolType::WSL,
-            tool_source,
+            install_method: None, // WSL 环境通常是 npm
             installed,
             version,
             install_path,
@@ -378,10 +333,6 @@ impl ToolInstance {
     ) -> Self {
         let now = chrono::Utc::now().timestamp();
         let ssh_display_name = ssh_config.display_name.clone();
-        let tool_source = install_path
-            .as_ref()
-            .map(|p| ToolSource::from_install_path(p))
-            .unwrap_or(ToolSource::External);
 
         ToolInstance {
             instance_id: format!(
@@ -392,7 +343,7 @@ impl ToolInstance {
             base_id,
             tool_name,
             tool_type: ToolType::SSH,
-            tool_source,
+            install_method: None, // SSH 远程环境
             installed,
             version,
             install_path,

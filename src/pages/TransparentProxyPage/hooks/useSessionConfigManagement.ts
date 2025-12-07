@@ -2,13 +2,13 @@
 // 提供配置列表加载和应用配置到会话的功能
 
 import { useState, useCallback } from 'react';
-import { listProfiles, getProfileConfig, updateSessionConfig } from '@/lib/tauri-commands';
+import { pmListToolProfiles, pmGetProfile, updateSessionConfig } from '@/lib/tauri-commands';
 
 /**
  * 会话配置管理 Hook
  *
  * 功能：
- * - 加载 Claude Code 配置列表（global + 配置文件）
+ * - 加载 Claude Code 配置列表（使用新的 ProfileManager API）
  * - 应用选中的配置到指定会话
  * - 处理配置切换逻辑（global vs custom）
  */
@@ -23,7 +23,7 @@ export function useSessionConfigManagement() {
    */
   const loadProfiles = useCallback(async () => {
     try {
-      const profileList = await listProfiles('claude-code');
+      const profileList = await pmListToolProfiles('claude-code');
       setProfiles(['global', ...profileList]);
     } catch (error) {
       console.error('Failed to load profiles:', error);
@@ -45,14 +45,14 @@ export function useSessionConfigManagement() {
         await updateSessionConfig(sessionId, 'global', null, '', '');
       } else {
         // 切换到自定义配置：读取指定配置文件的详情（不激活）
-        const config = await getProfileConfig('claude-code', selectedProfile);
+        const profileData = await pmGetProfile('claude-code', selectedProfile);
         // 保存 custom_profile_name 以便显示
         await updateSessionConfig(
           sessionId,
           'custom',
           selectedProfile,
-          config.base_url,
-          config.api_key,
+          profileData.base_url,
+          profileData.api_key,
         );
       }
       return { success: true };

@@ -23,7 +23,7 @@ use tokio::net::TcpListener;
 use tokio::sync::RwLock;
 
 use super::headers::RequestProcessor;
-use crate::models::ToolProxyConfig;
+use crate::models::proxy_config::ToolProxyConfig;
 
 /// 单个代理实例
 pub struct ProxyInstance {

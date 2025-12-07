@@ -3,8 +3,7 @@ import { Separator } from '@/components/ui/separator';
 import {
   LayoutDashboard,
   Wrench,
-  Key,
-  ArrowRightLeft,
+  Settings2,
   BarChart3,
   Wallet,
   Radio,
@@ -69,35 +68,14 @@ export function AppSidebar({ activeTab, onTabChange, restrictNavigation }: AppSi
           工具管理
         </Button>
 
-        {/* 安装工具页面已废弃，保留代码供参考 */}
-        {/* <Button
-          variant={activeTab === 'install' ? 'default' : 'ghost'}
-          className="w-full justify-start transition-all hover:scale-105"
-          onClick={() => handleTabChange('install')}
-          disabled={restrictNavigation && activeTab !== 'install'}
-        >
-          <Package className="mr-2 h-4 w-4" />
-          安装工具
-        </Button> */}
-
         <Button
-          variant={activeTab === 'config' ? 'default' : 'ghost'}
+          variant={activeTab === 'profile-management' ? 'default' : 'ghost'}
           className="w-full justify-start transition-all hover:scale-105"
-          onClick={() => handleTabChange('config')}
-          disabled={restrictNavigation && activeTab !== 'config'}
+          onClick={() => handleTabChange('profile-management')}
+          disabled={restrictNavigation && activeTab !== 'profile-management'}
         >
-          <Key className="mr-2 h-4 w-4" />
-          配置 API
-        </Button>
-
-        <Button
-          variant={activeTab === 'switch' ? 'default' : 'ghost'}
-          className="w-full justify-start transition-all hover:scale-105"
-          onClick={() => handleTabChange('switch')}
-          disabled={restrictNavigation && activeTab !== 'switch'}
-        >
-          <ArrowRightLeft className="mr-2 h-4 w-4" />
-          切换配置
+          <Settings2 className="mr-2 h-4 w-4" />
+          配置管理
         </Button>
 
         <Button

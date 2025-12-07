@@ -26,7 +26,12 @@ import {
 import { useSessionData } from '../../hooks/useSessionData';
 import { SessionConfigDialog } from '../SessionConfigDialog';
 import { SessionNoteDialog } from '../SessionNoteDialog';
-import { getGlobalConfig, saveGlobalConfig, type SessionRecord } from '@/lib/tauri-commands';
+import {
+  getProxyConfig,
+  getGlobalConfig,
+  saveGlobalConfig,
+  type SessionRecord,
+} from '@/lib/tauri-commands';
 import { isActiveSession } from '@/utils/sessionHelpers';
 
 /**
@@ -219,13 +224,12 @@ export function ClaudeContent() {
 
   // 加载配置状态
   const loadConfig = useCallback(() => {
-    getGlobalConfig()
-      .then((config) => {
-        // 使用 Claude Code 工具级别的会话端点配置
-        const claudeConfig = config?.proxy_configs?.['claude-code'];
-        setSessionEndpointEnabled(claudeConfig?.session_endpoint_config_enabled ?? false);
+    Promise.all([getProxyConfig('claude-code'), getGlobalConfig()])
+      .then(([proxyConfig, globalConfig]) => {
+        // 从 ProxyConfigManager 读取会话端点配置开关
+        setSessionEndpointEnabled(proxyConfig?.session_endpoint_config_enabled ?? false);
         // 读取是否已隐藏提示
-        setHintDismissed(config?.hide_session_config_hint ?? false);
+        setHintDismissed(globalConfig?.hide_session_config_hint ?? false);
       })
       .catch(() => {
         setSessionEndpointEnabled(false);

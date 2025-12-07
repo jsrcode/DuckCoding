@@ -68,17 +68,26 @@ last-updated: 2025-11-23
 - `src-tauri/src/main.rs` 仅保留应用启动与托盘事件注册，所有 Tauri Commands 拆分到 `src-tauri/src/commands/*`，服务实现位于 `services/*`，核心设施放在 `core/*`（HTTP、日志、错误）。
 - **工具管理系统**：
   - 多环境架构：支持本地（Local）、WSL、SSH 三种环境的工具实例管理
-  - 数据模型：`ToolType`（环境类型）、`ToolSource`（DuckCodingManaged/External）、`ToolInstance`（工具实例）存储在 `models/tool.rs`
-  - SQLite 存储：`tool_instances` 表由 `services/tool/db::ToolInstanceDB` 管理，存储用户添加的 WSL/SSH 实例
-  - 混合架构：`services/tool/registry::ToolRegistry` 统一管理内置工具（自动检测）和用户工具（数据库读取）
+  - 数据模型：`ToolType`（环境类型）、`ToolInstance`（工具实例）存储在 `models/tool.rs`
+  - **JSON 存储（2025-12-04）**：`tools.json` 存储所有工具实例，支持版本控制和多端同步（位于 `~/.duckcoding/tools.json`）
+  - 数据结构：按工具分组（`ToolGroup`），每个工具包含 `local_tools`、`wsl_tools`、`ssh_tools` 三个实例列表
+  - 数据管理：`services/tool/db::ToolInstanceDB` 操作 JSON 文件，使用 `DataManager` 统一读写
+  - 自动迁移：首次启动自动从 SQLite 迁移到 JSON，旧数据库备份为 `tool_instances.db.backup`
+  - 安装方式记录：`install_method` 字段记录实际安装方式（npm/brew/official），用于自动选择更新方法
   - WSL 支持：`utils/wsl_executor::WSLExecutor` 提供 Windows 下的 WSL 命令执行和工具检测（10秒超时）
-  - 来源识别：通过安装路径自动判断工具来源（`~/.duckcoding/tool/bin/` 为 DuckCoding 管理，其它为外部安装）
   - Tauri 命令：`get_tool_instances`、`refresh_tool_instances`、`add_wsl_tool_instance`、`add_ssh_tool_instance`、`delete_tool_instance`（位于 `commands/tool_management.rs`）
   - 前端页面：`ToolManagementPage` 按工具（Claude Code/CodeX/Gemini CLI）分组展示，每个工具下列出所有环境实例，使用表格列表样式（`components/ToolListSection`）
   - 功能支持：检测更新（仅 DuckCoding 管理 + 非 SSH）、版本管理（占位 UI）、删除实例（仅 SSH 非内置）
   - 导航集成：AppSidebar 新增"工具管理"入口（Wrench 图标），原"安装工具"已注释
   - 类型安全：完整的 TypeScript 类型定义在 `types/tool-management.ts`，Hook `useToolManagement` 负责状态管理和操作
   - SSH 功能：本期仅保留 UI 和数据结构，实际功能禁用（`AddInstanceDialog` 和表格操作按钮灰显）
+  - **Trait-based Detector 架构（2025-12-04）**：
+    - `ToolDetector` trait 定义统一的检测、安装、配置管理接口（位于 `services/tool/detector_trait.rs`）
+    - 每个工具独立实现：`ClaudeCodeDetector`、`CodeXDetector`、`GeminiCLIDetector`（位于 `services/tool/detectors/`）
+    - `DetectorRegistry` 注册表管理所有 Detector 实例，提供 `get(tool_id)` 查询接口
+    - `ToolRegistry` 和 `InstallerService` 优先使用 Detector，未注册的工具回退到旧逻辑（向后兼容）
+    - 新增工具仅需：1) 实现 ToolDetector trait，2) 注册到 DetectorRegistry，3) 添加 Tool 定义
+    - 每个 Detector 文件包含完整的检测、安装、更新、配置管理逻辑，模块化且易测试
 - **透明代理已重构为多工具架构**：
   - `ProxyManager` 统一管理三个工具（Claude Code、Codex、Gemini CLI）的代理实例
   - `HeadersProcessor` trait 定义工具特定的 headers 处理逻辑（位于 `services/proxy/headers/`）
@@ -94,7 +103,12 @@ last-updated: 2025-11-23
 - `utils::config::migrate_session_config` 会将旧版 `GlobalConfig.session_endpoint_config_enabled` 自动迁移到各工具配置，确保升级过程不会丢开关
 - 全局配置读写统一走 `utils::config::{read_global_config, write_global_config, apply_proxy_if_configured}`，避免出现多份路径逻辑；任何命令要修改配置都应调用这些辅助函数。
 - UpdateService / 统计命令等都通过 `tauri::State` 注入复用，前端 ToolStatus 的结构保持轻量字段 `{id,name,installed,version}`。
-- 工具安装状态由 `services::tool::ToolStatusCache` 并行检测与缓存，`check_installations`/`refresh_tool_status` 命令复用该缓存；安装/更新成功后或手动刷新会清空命中的工具缓存。
+- **工具状态管理已统一到数据库架构（2025-12-04）**：
+  - `check_installations` 命令改为从 `ToolRegistry` 获取数据，优先读取数据库（< 10ms），首次启动自动检测并持久化（~1.3s）
+  - `refresh_tool_status` 命令重新检测所有本地工具并更新数据库（upsert + 删除已卸载）
+  - Dashboard 和 ToolManagement 现使用统一数据源，消除了双数据流问题
+  - `ToolStatusCache` 标记为已废弃，保留仅用于向后兼容
+  - 所有工具状态查询统一走 `ToolRegistry::get_local_tool_status()` 和 `refresh_and_get_local_status()`
 - UI 相关的托盘/窗口操作集中在 `src-tauri/src/ui/*`，其它模块如需最小化到托盘请调用 `ui::hide_window_to_tray` 等封装方法。
 - 新增 `TransparentProxyPage` 与会话数据库：`SESSION_MANAGER` 使用 SQLite 记录每个代理会话的 endpoint/API Key，前端可按工具启停代理、查看历史并启用「会话级 Endpoint 配置」开关。页面内的 `ProxyControlBar`、`ProxySettingsDialog`、`ProxyConfigDialog` 负责代理启停、配置切换、工具级设置并内建缺失配置提示。
 - **余额监控页面（BalancePage）**：
@@ -105,7 +119,39 @@ last-updated: 2025-11-23
   - `useBalanceMonitor` hook 负责自动刷新逻辑，支持配置级别的刷新间隔
   - 配置表单（`ConfigFormDialog`）支持模板选择、代码编辑、静态 headers（JSON 格式）
   - 卡片视图（`ConfigCard`）展示余额信息、使用比例、到期时间、错误提示
-- Profile Center 已为三工具保存完整原生快照：Claude（settings.json + config.json，可选）、Codex（config.toml + auth.json）、Gemini（settings.json + .env），导入/激活/监听都会覆盖附属文件。
+- **Profile 管理系统 v2.0（2025-12-06）**：
+  - **双文件 JSON 架构**：替代旧版分散式目录结构（profiles/、active/、metadata/）
+    - `~/.duckcoding/profiles.json`：统一存储所有工具的 Profile 数据仓库
+    - `~/.duckcoding/active.json`：工具激活状态管理
+  - **数据结构**：
+    - `ProfilesStore`：按工具分组（`claude_code`、`codex`、`gemini_cli`），每个工具包含 `HashMap<String, ProfileData>`
+    - `ActiveStore`：每个工具一个 `Option<ActiveProfile>`，记录当前激活的 Profile 名称和切换时间
+    - `ProfilePayload`：Enum 类型，支持 Claude/Codex/Gemini 三种变体，存储工具特定配置和原生文件快照
+  - **核心服务**（位于 `services/profile_manager/`）：
+    - `ProfileManager`：统一的 Profile CRUD 接口，支持列表、创建、更新、删除、激活、导入导出
+    - `NativeConfigSync`：原生配置文件参数同步
+      - **激活操作**：仅替换工具原生配置文件中的 API Key 和 Base URL 两个参数，保留其他配置（如主题、快捷键等）
+      - **支持格式**：Claude（settings.json）、Codex（auth.json + config.toml）、Gemini（.env）
+      - **完整快照**：Profile 存储时保存完整原生文件快照（settings.json + config.json、config.toml + auth.json、settings.json + .env），用于导入导出和配置回滚
+  - **迁移系统**（ProfileV2Migration）：
+    - 支持从**两套旧系统**迁移到新架构：
+      1. **原始工具配置**：`~/.claude/settings.{profile}.json`、`~/.codex/config.{profile}.toml + auth.{profile}.json`、`~/.gemini-cli/.env.{profile}`
+      2. **旧 profiles/ 目录系统**：`~/.duckcoding/profiles/{tool}/{profile}.{ext}` + `active/{tool}.json` + `metadata/index.json`
+    - 迁移逻辑：先从原始配置迁移创建 Profile，再从 profiles/ 目录补充（跳过重复），最后合并激活状态
+    - 清理机制：迁移完成后自动备份到 `backup_profile_v1_{timestamp}/` 并删除旧目录（profiles/、active/、metadata/）
+    - 手动清理：提供 `clean_legacy_backups` 命令删除备份的原始配置文件（settings.{profile}.json 等）
+  - **前端页面**（ProfileManagementPage）：
+    - Tab 分组布局：按工具（Claude Code、Codex、Gemini CLI）水平分页
+    - `ActiveProfileCard`：显示当前激活配置，支持工具实例选择器（Local/WSL/SSH）、版本信息、更新检测
+    - Profile 列表：支持创建、编辑、删除、激活、导入导出操作
+  - **Tauri 命令**（位于 `commands/profile_commands.rs`）：
+    - Profile CRUD：`list_profiles`、`create_profile`、`update_profile`、`delete_profile`、`activate_profile`
+    - 导入导出：`import_profile`、`export_profile`、`import_from_native`
+    - 原生同步：`sync_to_native`、`sync_from_native`
+  - **类型定义**（`types/profile.ts`）：
+    - `ProfileGroup`：工具分组，包含工具信息和 Profile 列表
+    - `ProfileDescriptor`：Profile 元数据（名称、格式、创建/更新时间、来源）
+    - `ProfilePayload`：联合类型，支持 Claude/Codex/Gemini 配置
 - **新用户引导系统**：
   - 首次启动强制引导，配置存储在 `GlobalConfig.onboarding_status: Option<OnboardingStatus>`（包含已完成版本、跳过步骤、完成时间）
   - 版本化管理，支持增量更新（v1 -> v2 只展示新增内容），独立的引导内容版本号（与应用版本解耦）
@@ -115,6 +161,21 @@ last-updated: 2025-11-23
   - v1 引导包含 4 步：欢迎页、代理配置（可跳过）、工具介绍、完成页；v2/v3 引导聚焦新增特性
   - 引导组件：`OnboardingOverlay`（全屏遮罩）、`OnboardingFlow`（流程控制）、步骤组件（`steps/v*/*`）
   - App.tsx 启动时检查 `onboarding_status`，根据版本对比决定是否显示引导
+- **统一数据管理系统（DataManager）**：
+  - 模块位置：`src-tauri/src/data/*`，提供 JSON/TOML/ENV 格式的统一管理接口
+  - 核心组件：`DataManager` 统一入口，`JsonManager`/`TomlManager`/`EnvManager` 格式管理器，LRU 缓存层（基于文件校验和）
+  - 使用模式：
+    - `manager.json()` - 带缓存的 JSON 操作，用于全局配置和 Profile
+    - `manager.json_uncached()` - 无缓存的 JSON 操作，用于工具原生配置（需实时更新）
+    - `manager.toml()` - TOML 操作，支持保留注释和格式（使用 `read_document()` / `write()` 配合 `toml_edit::DocumentMut`）
+    - `manager.env()` - .env 文件操作，自动排序和格式化
+  - 自动化特性：目录创建、Unix 权限设置（0o600）、原子写入、基于 mtime 的缓存失效
+  - 已迁移模块：
+    - `utils/config.rs`: 全局配置读写（`read_global_config`、`write_global_config`）
+    - `services/config.rs`: 工具配置管理（Claude/Codex/Gemini 的 read/save/apply 系列函数）
+    - `services/profile_store.rs`: Profile 存储管理（`save_profile_payload`、`load_profile_payload`、`read_active_state`、`save_active_state`）
+  - 测试覆盖：16 个迁移测试（`data::migration_tests`）+ 各模块原有测试全部通过
+  - API 原则：所有新代码的文件 I/O 操作必须使用 DataManager，禁止直接使用 `fs::read_to_string`/`fs::write`
 
 ### 透明代理扩展指南
 

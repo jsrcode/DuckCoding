@@ -210,6 +210,7 @@ mod tests {
     #[test]
     fn test_build_proxy_url_basic() {
         let config = GlobalConfig {
+            version: None,
             user_id: String::new(),
             system_token: String::new(),
             proxy_enabled: true,
@@ -233,6 +234,7 @@ mod tests {
             onboarding_status: None,
             external_watch_enabled: true,
             external_poll_interval_ms: 5000,
+            single_instance_enabled: true,
         };
 
         let url = ProxyService::build_proxy_url(&config);
@@ -242,6 +244,7 @@ mod tests {
     #[test]
     fn test_build_proxy_url_with_auth() {
         let config = GlobalConfig {
+            version: None,
             user_id: String::new(),
             system_token: String::new(),
             proxy_enabled: true,
@@ -265,6 +268,7 @@ mod tests {
             onboarding_status: None,
             external_watch_enabled: true,
             external_poll_interval_ms: 5000,
+            single_instance_enabled: true,
         };
 
         let url = ProxyService::build_proxy_url(&config);
@@ -277,6 +281,7 @@ mod tests {
     #[test]
     fn test_build_proxy_url_socks5() {
         let config = GlobalConfig {
+            version: None,
             user_id: String::new(),
             system_token: String::new(),
             proxy_enabled: true,
@@ -300,6 +305,7 @@ mod tests {
             onboarding_status: None,
             external_watch_enabled: true,
             external_poll_interval_ms: 5000,
+            single_instance_enabled: true,
         };
 
         let url = ProxyService::build_proxy_url(&config);

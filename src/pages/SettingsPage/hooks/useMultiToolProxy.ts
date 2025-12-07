@@ -3,12 +3,11 @@ import {
   startToolProxy,
   stopToolProxy,
   getAllProxyStatus,
-  getGlobalConfig,
-  saveGlobalConfig,
+  getProxyConfig,
+  updateProxyConfig,
   type AllProxyStatus,
-  type TransparentProxyStatus,
-  type GlobalConfig,
   type ToolProxyConfig,
+  type ToolId,
 } from '@/lib/tauri-commands';
 
 // 工具元数据
@@ -60,28 +59,29 @@ function getDefaultToolConfig(toolId: string): ToolProxyConfig {
 export function useMultiToolProxy() {
   const [allProxyStatus, setAllProxyStatus] = useState<AllProxyStatus>({});
   const [loadingTools, setLoadingTools] = useState<Set<string>>(new Set());
-  const [globalConfig, setGlobalConfig] = useState<GlobalConfig | null>(null);
   const [toolConfigs, setToolConfigs] = useState<Record<string, ToolProxyConfig>>({});
   const [savingConfig, setSavingConfig] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
-  // 加载全局配置
-  const loadGlobalConfig = useCallback(async () => {
+  // 加载单个工具配置
+  const loadToolConfig = useCallback(async (toolId: string) => {
     try {
-      const config = await getGlobalConfig();
-      setGlobalConfig(config);
-
-      // 初始化每个工具的配置
-      const configs: Record<string, ToolProxyConfig> = {};
-      for (const tool of SUPPORTED_TOOLS) {
-        configs[tool.id] = config?.proxy_configs?.[tool.id] || getDefaultToolConfig(tool.id);
-      }
-      setToolConfigs(configs);
+      const config = await getProxyConfig(toolId as ToolId);
+      return config || getDefaultToolConfig(toolId);
     } catch (error) {
-      console.error('Failed to load global config:', error);
-      throw error;
+      console.error(`Failed to load ${toolId} config:`, error);
+      return getDefaultToolConfig(toolId);
     }
   }, []);
+
+  // 加载所有工具配置
+  const loadAllConfigs = useCallback(async () => {
+    const configs: Record<string, ToolProxyConfig> = {};
+    for (const tool of SUPPORTED_TOOLS) {
+      configs[tool.id] = await loadToolConfig(tool.id);
+    }
+    setToolConfigs(configs);
+  }, [loadToolConfig]);
 
   // 加载所有工具的代理状态
   const loadAllProxyStatus = useCallback(async () => {
@@ -96,9 +96,9 @@ export function useMultiToolProxy() {
 
   // 初始化加载
   useEffect(() => {
-    loadGlobalConfig().catch(console.error);
+    loadAllConfigs().catch(console.error);
     loadAllProxyStatus().catch(console.error);
-  }, [loadGlobalConfig, loadAllProxyStatus]);
+  }, [loadAllConfigs, loadAllProxyStatus]);
 
   // 更新单个工具的配置（本地状态）
   const updateToolConfig = useCallback((toolId: string, updates: Partial<ToolProxyConfig>) => {
@@ -112,93 +112,30 @@ export function useMultiToolProxy() {
     setHasUnsavedChanges(true);
   }, []);
 
-  // 获取会话级端点配置开关状态
-  const sessionEndpointConfigEnabled = globalConfig?.session_endpoint_config_enabled ?? false;
-
-  // 更新会话级端点配置开关
-  const setSessionEndpointConfigEnabled = useCallback(
-    async (enabled: boolean) => {
-      if (!globalConfig) return;
-      const configToSave: GlobalConfig = {
-        ...globalConfig,
-        session_endpoint_config_enabled: enabled,
-      };
-      await saveGlobalConfig(configToSave);
-      setGlobalConfig(configToSave);
-    },
-    [globalConfig],
-  );
-
-  // 保存配置到后端
-  const saveToolConfigs = useCallback(async (): Promise<void> => {
-    if (!globalConfig) {
-      throw new Error('全局配置未加载');
-    }
-
-    console.log('开始保存配置，toolConfigs:', toolConfigs);
+  // 保存所有配置
+  const saveAllConfigs = useCallback(async () => {
     setSavingConfig(true);
     try {
-      const configToSave: GlobalConfig = {
-        ...globalConfig,
-        proxy_configs: toolConfigs,
-      };
-
-      console.log('准备保存的配置:', configToSave);
-      await saveGlobalConfig(configToSave);
-      setGlobalConfig(configToSave);
+      // 保存每个工具的配置到 ProxyConfigManager
+      for (const [toolId, config] of Object.entries(toolConfigs)) {
+        await updateProxyConfig(toolId as ToolId, config);
+      }
       setHasUnsavedChanges(false);
-      console.log('配置保存成功');
     } catch (error) {
-      console.error('配置保存失败:', error);
+      console.error('Failed to save configs:', error);
       throw error;
     } finally {
       setSavingConfig(false);
     }
-  }, [globalConfig, toolConfigs]);
+  }, [toolConfigs]);
 
-  // 生成代理 API Key
-  const generateApiKey = useCallback(
-    (toolId: string) => {
-      const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-      let result = `dc-${toolId.replace('-', '')}-`;
-      for (let i = 0; i < 24; i++) {
-        result += charset.charAt(Math.floor(Math.random() * charset.length));
-      }
-      updateToolConfig(toolId, { local_api_key: result });
-    },
-    [updateToolConfig],
-  );
-
-  // 启动指定工具的代理
-  const handleStartToolProxy = useCallback(
-    async (toolId: string): Promise<string> => {
-      // 先保存配置
-      await saveToolConfigs();
-
+  // 启动代理
+  const startProxy = useCallback(
+    async (toolId: string) => {
       setLoadingTools((prev) => new Set(prev).add(toolId));
       try {
-        const result = await startToolProxy(toolId);
+        await startToolProxy(toolId);
         await loadAllProxyStatus();
-        return result;
-      } finally {
-        setLoadingTools((prev) => {
-          const next = new Set(prev);
-          next.delete(toolId);
-          return next;
-        });
-      }
-    },
-    [loadAllProxyStatus, saveToolConfigs],
-  );
-
-  // 停止指定工具的代理
-  const handleStopToolProxy = useCallback(
-    async (toolId: string): Promise<string> => {
-      setLoadingTools((prev) => new Set(prev).add(toolId));
-      try {
-        const result = await stopToolProxy(toolId);
-        await loadAllProxyStatus();
-        return result;
       } finally {
         setLoadingTools((prev) => {
           const next = new Set(prev);
@@ -210,46 +147,35 @@ export function useMultiToolProxy() {
     [loadAllProxyStatus],
   );
 
-  // 获取指定工具的状态
-  const getToolStatus = useCallback(
-    (toolId: string): TransparentProxyStatus | null => {
-      return allProxyStatus[toolId] || null;
+  // 停止代理
+  const stopProxy = useCallback(
+    async (toolId: string) => {
+      setLoadingTools((prev) => new Set(prev).add(toolId));
+      try {
+        await stopToolProxy(toolId);
+        await loadAllProxyStatus();
+      } finally {
+        setLoadingTools((prev) => {
+          const next = new Set(prev);
+          next.delete(toolId);
+          return next;
+        });
+      }
     },
-    [allProxyStatus],
-  );
-
-  // 获取指定工具的配置
-  const getToolConfig = useCallback(
-    (toolId: string): ToolProxyConfig => {
-      return toolConfigs[toolId] || getDefaultToolConfig(toolId);
-    },
-    [toolConfigs],
-  );
-
-  // 检查工具是否正在加载
-  const isToolLoading = useCallback(
-    (toolId: string): boolean => {
-      return loadingTools.has(toolId);
-    },
-    [loadingTools],
+    [loadAllProxyStatus],
   );
 
   return {
     allProxyStatus,
     toolConfigs,
+    loadingTools,
     savingConfig,
     hasUnsavedChanges,
-    sessionEndpointConfigEnabled,
-    setSessionEndpointConfigEnabled,
-    loadGlobalConfig,
-    loadAllProxyStatus,
     updateToolConfig,
-    saveToolConfigs,
-    generateApiKey,
-    handleStartToolProxy,
-    handleStopToolProxy,
-    getToolStatus,
-    getToolConfig,
-    isToolLoading,
+    saveAllConfigs,
+    startProxy,
+    stopProxy,
+    loadAllConfigs,
+    loadAllProxyStatus,
   };
 }
