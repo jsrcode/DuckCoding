@@ -1,6 +1,6 @@
 // 透明代理配置管理服务
 use crate::models::{GlobalConfig, Tool, ToolProxyConfig};
-use crate::services::profile_store::{load_profile_payload, ProfilePayload};
+use crate::services::profile_manager::ProfileManager;
 use anyhow::{Context, Result};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -554,13 +554,10 @@ impl TransparentProxyConfigService {
             anyhow::bail!("从备份读取配置目前仅支持 Claude Code");
         }
 
-        let payload =
-            load_profile_payload(&tool.id, profile_name).context("读取集中存储的配置失败")?;
-        match payload {
-            ProfilePayload::Claude {
-                api_key, base_url, ..
-            } => Ok((api_key, base_url)),
-            _ => anyhow::bail!("配置内容与工具不匹配: {}", tool.id),
-        }
+        // 使用 ProfileManager 读取 Profile
+        let profile_manager = ProfileManager::new()?;
+        let profile = profile_manager.get_claude_profile(profile_name)?;
+
+        Ok((profile.api_key, profile.base_url))
     }
 }

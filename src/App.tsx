@@ -42,7 +42,6 @@ type TabType =
   | 'dashboard'
   | 'tool-management'
   | 'install'
-  | 'switch'
   | 'profile-management'
   | 'statistics'
   | 'balance'

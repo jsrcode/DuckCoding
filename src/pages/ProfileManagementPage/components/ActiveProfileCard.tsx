@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ToolAdvancedConfigDialog } from '@/components/ToolAdvancedConfigDialog';
 
 interface ActiveProfileCardProps {
   group: ProfileGroup;
@@ -50,6 +51,9 @@ export function ActiveProfileCard({ group, proxyRunning }: ActiveProfileCardProp
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
+
+  // 高级配置 Dialog 状态
+  const [advancedConfigOpen, setAdvancedConfigOpen] = useState(false);
 
   // 加载工具实例
   useEffect(() => {
@@ -192,7 +196,7 @@ export function ActiveProfileCard({ group, proxyRunning }: ActiveProfileCardProp
               {(activeProfile || proxyRunning) && (
                 <>
                   <Badge variant="outline" className="text-xs font-normal">
-                    {proxyRunning ? '配置:透明代理' : `配置:${activeProfile.name}`}
+                    {!proxyRunning ? `配置:${activeProfile?.name}` : '配置:透明代理'}
                   </Badge>
                   {hasUpdate && (
                     <Badge variant="destructive" className="text-xs">
@@ -281,7 +285,13 @@ export function ActiveProfileCard({ group, proxyRunning }: ActiveProfileCardProp
           {/* 第二行：小按钮组 */}
           <div className="flex items-center gap-2">
             {/* 高级配置按钮 */}
-            <Button variant="outline" size="sm" className="h-7 text-xs" title="高级配置">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              title="高级配置"
+              onClick={() => setAdvancedConfigOpen(true)}
+            >
               高级配置
             </Button>
 
@@ -365,6 +375,13 @@ export function ActiveProfileCard({ group, proxyRunning }: ActiveProfileCardProp
           )}
         </>
       ) : null}
+
+      {/* 高级配置 Dialog */}
+      <ToolAdvancedConfigDialog
+        toolId={group.tool_id}
+        open={advancedConfigOpen}
+        onOpenChange={setAdvancedConfigOpen}
+      />
     </div>
   );
 }

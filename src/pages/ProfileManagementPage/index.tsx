@@ -237,9 +237,13 @@ function HelpDialog({
         <div className="space-y-4 text-sm">
           <div className="space-y-2">
             <h4 className="font-medium">1.正常配置模式[未开启透明代理]</h4>
-            <p className="text-muted-foreground">切换配置后，如果工具正在运行，需要重启对应的工具才能使新配置生效。</p>
+            <p className="text-muted-foreground">
+              切换配置后，如果工具正在运行，需要重启对应的工具才能使新配置生效。
+            </p>
             <h4 className="font-medium">2.透明代理模式</h4>
-            <p className="text-muted-foreground">切换配置请前往透明代理页面进行，切换配置后无需重启工具即可生效。</p>
+            <p className="text-muted-foreground">
+              切换配置请前往透明代理页面进行，切换配置后无需重启工具即可生效。
+            </p>
           </div>
         </div>
       </DialogContent>

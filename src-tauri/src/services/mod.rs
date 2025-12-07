@@ -12,7 +12,6 @@ pub mod config;
 pub mod config_watcher;
 pub mod migration_manager;
 pub mod profile_manager; // Profile管理（v2.1）
-pub mod profile_store;
 pub mod proxy;
 pub mod proxy_config_manager; // 透明代理配置管理（v2.1）
 pub mod session;
@@ -27,7 +26,6 @@ pub use profile_manager::{
     ActiveStore, ClaudeProfile, CodexProfile, GeminiProfile, ProfileDescriptor, ProfileManager,
     ProfilesStore,
 }; // Profile管理（v2.0）
-pub use profile_store::*;
 pub use proxy::*;
 // session 模块：明确导出避免 db 名称冲突
 pub use session::{manager::SESSION_MANAGER, models::*};

@@ -32,11 +32,3 @@ pub struct UpdateResult {
     pub mirror_is_stale: Option<bool>,  // 镜像是否滞后
     pub tool_id: Option<String>,        // 工具ID，用于批量检查时识别工具
 }
-
-/// 活动配置
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct ActiveConfig {
-    pub api_key: String,
-    pub base_url: String,
-    pub profile_name: Option<String>, // 当前配置的名称
-}

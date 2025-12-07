@@ -202,22 +202,6 @@ export interface ExternalConfigChange {
   fallback_poll?: boolean;
 }
 
-export interface MigrationRecord {
-  tool_id: string;
-  profile_name: string;
-  from_path: string;
-  to_path: string;
-  succeeded: boolean;
-  message?: string | null;
-  timestamp: string;
-}
-
-export interface LegacyCleanupResult {
-  tool_id: string;
-  removed: string[];
-  failed: [string, string][];
-}
-
 export interface ImportExternalChangeResult {
   profileName: string;
   wasNew: boolean;
@@ -262,10 +246,6 @@ export async function updateTool(tool: string, force?: boolean): Promise<UpdateR
   return await invoke<UpdateResult>('update_tool', { tool, force });
 }
 
-export async function listProfiles(tool: string): Promise<string[]> {
-  return await invoke<string[]>('list_profiles', { tool });
-}
-
 export async function listProfileDescriptors(tool?: string): Promise<ProfileDescriptor[]> {
   return await invoke<ProfileDescriptor[]>('list_profile_descriptors', { tool });
 }
@@ -278,14 +258,6 @@ export async function ackExternalChange(tool: string): Promise<void> {
   return await invoke<void>('ack_external_change', { tool });
 }
 
-export async function getMigrationReport(): Promise<MigrationRecord[]> {
-  return await invoke<MigrationRecord[]>('get_migration_report');
-}
-
-export async function cleanLegacyBackups(): Promise<LegacyCleanupResult[]> {
-  return await invoke<LegacyCleanupResult[]>('clean_legacy_backups');
-}
-
 export async function importNativeChange(
   tool: string,
   profile: string,
@@ -296,23 +268,6 @@ export async function importNativeChange(
     profile,
     asNew,
   });
-}
-
-export async function switchProfile(tool: string, profile: string): Promise<void> {
-  return await invoke<void>('switch_profile', { tool, profile });
-}
-
-export async function getActiveConfig(tool: string): Promise<ActiveConfig> {
-  return await invoke<ActiveConfig>('get_active_config', { tool });
-}
-
-/**
- * 获取指定配置文件的详情（不激活）
- * @param tool - 工具 ID
- * @param profile - 配置名称
- */
-export async function getProfileConfig(tool: string, profile: string): Promise<ActiveConfig> {
-  return await invoke<ActiveConfig>('get_profile_config', { tool, profile });
 }
 
 export async function saveGlobalConfig(config: GlobalConfig): Promise<void> {

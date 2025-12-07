@@ -11,7 +11,6 @@ use crate::services::migration_manager::migration_trait::{Migration, MigrationRe
 use crate::services::profile_manager::{
     ActiveProfile, ActiveStore, ClaudeProfile, CodexProfile, GeminiProfile, ProfilesStore,
 };
-use crate::services::profile_store::{profiles_root, ProfileDescriptor, ProfileFormat};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -20,6 +19,44 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::time::Instant;
+
+// ==================== 迁移专用类型定义 ====================
+
+/// Profile 格式（迁移专用）
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ProfileFormat {
+    Json,
+    Toml,
+    Env,
+    #[default]
+    Unknown,
+}
+
+/// Profile 描述符（迁移专用）
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct ProfileDescriptor {
+    pub tool_id: String,
+    pub name: String,
+    #[serde(default)]
+    pub format: ProfileFormat,
+    pub path: PathBuf,
+    #[serde(default)]
+    pub updated_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub created_at: Option<DateTime<Utc>>,
+}
+
+// ==================== 迁移专用路径函数 ====================
+
+/// 返回旧的 profiles 目录路径（迁移专用）
+fn profiles_root() -> Result<PathBuf> {
+    let Some(home_dir) = dirs::home_dir() else {
+        anyhow::bail!("无法获取用户主目录");
+    };
+    let profiles = home_dir.join(".duckcoding/profiles");
+    Ok(profiles)
+}
 
 pub struct ProfileV2Migration;
 
