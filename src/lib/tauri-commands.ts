@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { ToolInstance, SSHConfig } from '@/types/tool-management';
+import type { ProfileData, ProfileDescriptor, ProfilePayload, ToolId } from '@/types/profile';
 
 export interface ToolStatus {
   mirrorIsStale: boolean;
@@ -261,22 +262,6 @@ export async function updateTool(tool: string, force?: boolean): Promise<UpdateR
   return await invoke<UpdateResult>('update_tool', { tool, force });
 }
 
-export async function configureApi(
-  tool: string,
-  provider: string,
-  apiKey: string,
-  baseUrl?: string,
-  profileName?: string,
-): Promise<void> {
-  return await invoke<void>('configure_api', {
-    tool,
-    provider,
-    apiKey,
-    baseUrl,
-    profileName,
-  });
-}
-
 export async function listProfiles(tool: string): Promise<string[]> {
   return await invoke<string[]>('list_profiles', { tool });
 }
@@ -315,10 +300,6 @@ export async function importNativeChange(
 
 export async function switchProfile(tool: string, profile: string): Promise<void> {
   return await invoke<void>('switch_profile', { tool, profile });
-}
-
-export async function deleteProfile(tool: string, profile: string): Promise<void> {
-  return await invoke<void>('delete_profile', { tool, profile });
 }
 
 export async function getActiveConfig(tool: string): Promise<ActiveConfig> {
@@ -843,4 +824,73 @@ export async function getSingleInstanceConfig(): Promise<boolean> {
  */
 export async function updateSingleInstanceConfig(enabled: boolean): Promise<void> {
   return await invoke<void>('update_single_instance_config', { enabled });
+}
+
+// ==================== Profile 管理命令（v2.0）====================
+
+/**
+ * 列出所有 Profile 描述符
+ */
+export async function pmListAllProfiles(): Promise<ProfileDescriptor[]> {
+  return invoke<ProfileDescriptor[]>('pm_list_all_profiles');
+}
+
+/**
+ * 列出指定工具的 Profile 名称
+ */
+export async function pmListToolProfiles(toolId: ToolId): Promise<string[]> {
+  return invoke<string[]>('pm_list_tool_profiles', { toolId });
+}
+
+/**
+ * 获取指定 Profile 的完整数据
+ */
+export async function pmGetProfile(toolId: ToolId, name: string): Promise<ProfileData> {
+  return invoke<ProfileData>('pm_get_profile', { toolId, name });
+}
+
+/**
+ * 保存 Profile（创建或更新）
+ */
+export async function pmSaveProfile(
+  toolId: ToolId,
+  name: string,
+  payload: ProfilePayload,
+): Promise<void> {
+  return invoke<void>('pm_save_profile', { toolId, name, input: payload });
+}
+
+/**
+ * 删除 Profile
+ */
+export async function pmDeleteProfile(toolId: ToolId, name: string): Promise<void> {
+  return invoke<void>('pm_delete_profile', { toolId, name });
+}
+
+/**
+ * 激活 Profile（切换）
+ */
+export async function pmActivateProfile(toolId: ToolId, name: string): Promise<void> {
+  return invoke<void>('pm_activate_profile', { toolId, name });
+}
+
+/**
+ * 获取当前激活的 Profile 名称
+ */
+export async function pmGetActiveProfileName(toolId: ToolId): Promise<string | null> {
+  return invoke<string | null>('pm_get_active_profile_name', { toolId });
+}
+
+/**
+ * 获取当前激活的 Profile 完整数据
+ */
+export async function pmGetActiveProfile(toolId: ToolId): Promise<ProfileData | null> {
+  return invoke<ProfileData | null>('pm_get_active_profile', { toolId });
+}
+
+/**
+ * 从原生配置文件捕获并保存为 Profile
+ */
+export async function pmCaptureFromNative(toolId: ToolId, name: string): Promise<void> {
+  return invoke<void>('pm_capture_from_native', { toolId, name });
 }

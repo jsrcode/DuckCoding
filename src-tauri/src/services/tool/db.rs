@@ -4,7 +4,9 @@
 
 use crate::data::DataManager;
 use crate::models::{ToolInstance, ToolType};
-use crate::services::tool::tools_config::{LocalToolInstance, SSHToolInstance, ToolsConfig, WSLToolInstance};
+use crate::services::tool::tools_config::{
+    LocalToolInstance, SSHToolInstance, ToolsConfig, WSLToolInstance,
+};
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 

@@ -11,11 +11,11 @@ use crate::utils::config;
 
 /// 集中配置中心目录结构：
 /// - ~/.duckcoding/profiles/{tool}/{profile}.{ext}
-/// - ~/.duckcoding/active/{tool}.json
 /// - ~/.duckcoding/metadata/index.json
 /// - 后续模块将基于这些路径进行统一读写与监听。
+///
+/// **注意**: active state 已迁移到 ProfileManager（~/.duckcoding/active.json）
 const PROFILES_DIR: &str = "profiles";
-const ACTIVE_DIR: &str = "active";
 const METADATA_DIR: &str = "metadata";
 const INDEX_FILE: &str = "index.json";
 const MIGRATION_LOG: &str = "migration.log.json";
@@ -39,14 +39,6 @@ pub enum ProfileSource {
     ExternalChange,
     Migrated,
     Generated,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct ActiveProfileState {
-    pub profile_name: Option<String>,
-    pub native_checksum: Option<String>,
-    pub last_synced_at: Option<DateTime<Utc>>,
-    pub dirty: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -85,6 +77,14 @@ pub struct MigrationRecord {
     pub timestamp: DateTime<Utc>,
 }
 
+/// 旧配置清理结果
+#[derive(Debug, Clone, Serialize)]
+pub struct LegacyCleanupResult {
+    pub tool_id: String,
+    pub removed: Vec<PathBuf>,
+    pub failed: Vec<(PathBuf, String)>,
+}
+
 /// 返回集中配置根目录（确保存在）
 pub fn center_root() -> Result<PathBuf> {
     let base = config::config_dir().map_err(|e| anyhow!(e))?;
@@ -103,12 +103,6 @@ pub fn tool_profiles_dir(tool_id: &str) -> Result<PathBuf> {
     let dir = profiles_root()?.join(tool_id);
     fs::create_dir_all(&dir).with_context(|| format!("创建工具配置目录失败: {dir:?}"))?;
     Ok(dir)
-}
-
-pub fn active_state_path(tool_id: &str) -> Result<PathBuf> {
-    let dir = center_root()?.join(ACTIVE_DIR);
-    fs::create_dir_all(&dir).context("创建 active 目录失败")?;
-    Ok(dir.join(format!("{tool_id}.json")))
 }
 
 pub fn metadata_index_path() -> Result<PathBuf> {
@@ -381,32 +375,6 @@ pub fn delete_profile(tool_id: &str, profile_name: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn read_active_state(tool_id: &str) -> Result<Option<ActiveProfileState>> {
-    let path = active_state_path(tool_id)?;
-    if !path.exists() {
-        return Ok(None);
-    }
-    let manager = DataManager::new();
-    let json_value = manager
-        .json()
-        .read(&path)
-        .with_context(|| format!("读取激活状态失败: {path:?}"))?;
-    let state: ActiveProfileState = serde_json::from_value(json_value)
-        .with_context(|| format!("解析激活状态失败: {path:?}"))?;
-    Ok(Some(state))
-}
-
-pub fn save_active_state(tool_id: &str, state: &ActiveProfileState) -> Result<()> {
-    let path = active_state_path(tool_id)?;
-    let manager = DataManager::new();
-    let json_value = serde_json::to_value(state).context("序列化激活状态失败")?;
-    manager
-        .json()
-        .write(&path, &json_value)
-        .with_context(|| format!("写入激活状态失败: {path:?}"))?;
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -468,16 +436,23 @@ mod tests {
             _ => panic!("unexpected payload variant"),
         }
 
-        let state = ActiveProfileState {
-            profile_name: Some(profile.to_string()),
-            native_checksum: Some("abc".to_string()),
-            last_synced_at: None,
-            dirty: false,
-        };
-        save_active_state(tool_id, &state)?;
-        let loaded_state = read_active_state(tool_id)?.expect("state should exist");
-        assert_eq!(loaded_state.profile_name, state.profile_name);
-        assert_eq!(loaded_state.native_checksum, state.native_checksum);
+        // 测试 active state（使用 ProfileManager）
+        use crate::services::profile_manager::ProfileManager;
+        let profile_manager = ProfileManager::new()?;
+        let mut active_store = profile_manager.load_active_store()?;
+        active_store.set_active(tool_id, profile.to_string());
+
+        if let Some(active) = active_store.get_active_mut(tool_id) {
+            active.native_checksum = Some("abc".to_string());
+            active.dirty = false;
+        }
+
+        profile_manager.save_active_store(&active_store)?;
+        let loaded_active = profile_manager
+            .get_active_state(tool_id)?
+            .expect("state should exist");
+        assert_eq!(loaded_active.profile, profile);
+        assert_eq!(loaded_active.native_checksum, Some("abc".to_string()));
 
         Ok(())
     }

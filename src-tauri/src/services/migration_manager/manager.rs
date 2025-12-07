@@ -28,7 +28,11 @@ impl MigrationManager {
 
     /// 注册迁移
     pub fn register(&mut self, migration: Arc<dyn Migration>) {
-        tracing::debug!("注册迁移: {} (目标版本: {})", migration.id(), migration.target_version());
+        tracing::debug!(
+            "注册迁移: {} (目标版本: {})",
+            migration.id(),
+            migration.target_version()
+        );
         self.migrations.push(migration);
     }
 
@@ -53,7 +57,8 @@ impl MigrationManager {
             .migrations
             .iter()
             .filter(|m| {
-                let needs = compare_versions(&current_version, m.target_version()) == Ordering::Less;
+                let needs =
+                    compare_versions(&current_version, m.target_version()) == Ordering::Less;
                 if needs {
                     tracing::info!(
                         "需要执行迁移: {} ({} → {})",
@@ -70,9 +75,8 @@ impl MigrationManager {
             tracing::info!("无需执行迁移");
         } else {
             // 3. 按 target_version 排序（从低到高）
-            pending_migrations.sort_by(|a, b| {
-                compare_versions(a.target_version(), b.target_version())
-            });
+            pending_migrations
+                .sort_by(|a, b| compare_versions(a.target_version(), b.target_version()));
 
             tracing::info!("共 {} 个迁移需要执行", pending_migrations.len());
         }
@@ -81,7 +85,11 @@ impl MigrationManager {
         let mut results = Vec::new();
 
         for migration in pending_migrations {
-            tracing::info!("执行迁移: {} (目标版本: {})", migration.name(), migration.target_version());
+            tracing::info!(
+                "执行迁移: {} (目标版本: {})",
+                migration.name(),
+                migration.target_version()
+            );
 
             let start_time = std::time::Instant::now();
             let result = migration.execute().await;
@@ -139,7 +147,8 @@ impl MigrationManager {
         }
 
         if !results.is_empty() {
-            tracing::info!("所有迁移执行完成，成功 {} 个，失败 {} 个",
+            tracing::info!(
+                "所有迁移执行完成，成功 {} 个，失败 {} 个",
                 results.iter().filter(|r| r.success).count(),
                 results.iter().filter(|r| !r.success).count()
             );

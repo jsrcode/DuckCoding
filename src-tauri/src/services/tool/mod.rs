@@ -17,5 +17,7 @@ pub use detectors::{ClaudeCodeDetector, CodeXDetector, DetectorRegistry, GeminiC
 pub use downloader::FileDownloader;
 pub use installer::InstallerService;
 pub use registry::ToolRegistry;
-pub use tools_config::{LocalToolInstance, SSHToolInstance, ToolGroup, ToolsConfig, WSLToolInstance};
+pub use tools_config::{
+    LocalToolInstance, SSHToolInstance, ToolGroup, ToolsConfig, WSLToolInstance,
+};
 pub use version::VersionService;

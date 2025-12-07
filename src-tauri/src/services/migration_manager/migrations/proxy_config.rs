@@ -12,6 +12,12 @@ use async_trait::async_trait;
 /// Proxy 配置重构迁移（目标版本 1.3.9）
 pub struct ProxyConfigMigration;
 
+impl Default for ProxyConfigMigration {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ProxyConfigMigration {
     pub fn new() -> Self {
         Self

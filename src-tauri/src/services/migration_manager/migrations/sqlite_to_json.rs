@@ -10,6 +10,12 @@ use async_trait::async_trait;
 /// SQLite → JSON 迁移（目标版本 1.3.9）
 pub struct SqliteToJsonMigration;
 
+impl Default for SqliteToJsonMigration {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SqliteToJsonMigration {
     pub fn new() -> Self {
         Self

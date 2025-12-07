@@ -119,7 +119,39 @@ last-updated: 2025-11-23
   - `useBalanceMonitor` hook 负责自动刷新逻辑，支持配置级别的刷新间隔
   - 配置表单（`ConfigFormDialog`）支持模板选择、代码编辑、静态 headers（JSON 格式）
   - 卡片视图（`ConfigCard`）展示余额信息、使用比例、到期时间、错误提示
-- Profile Center 已为三工具保存完整原生快照：Claude（settings.json + config.json，可选）、Codex（config.toml + auth.json）、Gemini（settings.json + .env），导入/激活/监听都会覆盖附属文件。
+- **Profile 管理系统 v2.0（2025-12-06）**：
+  - **双文件 JSON 架构**：替代旧版分散式目录结构（profiles/、active/、metadata/）
+    - `~/.duckcoding/profiles.json`：统一存储所有工具的 Profile 数据仓库
+    - `~/.duckcoding/active.json`：工具激活状态管理
+  - **数据结构**：
+    - `ProfilesStore`：按工具分组（`claude_code`、`codex`、`gemini_cli`），每个工具包含 `HashMap<String, ProfileData>`
+    - `ActiveStore`：每个工具一个 `Option<ActiveProfile>`，记录当前激活的 Profile 名称和切换时间
+    - `ProfilePayload`：Enum 类型，支持 Claude/Codex/Gemini 三种变体，存储工具特定配置和原生文件快照
+  - **核心服务**（位于 `services/profile_manager/`）：
+    - `ProfileManager`：统一的 Profile CRUD 接口，支持列表、创建、更新、删除、激活、导入导出
+    - `NativeConfigSync`：原生配置文件参数同步
+      - **激活操作**：仅替换工具原生配置文件中的 API Key 和 Base URL 两个参数，保留其他配置（如主题、快捷键等）
+      - **支持格式**：Claude（settings.json）、Codex（auth.json + config.toml）、Gemini（.env）
+      - **完整快照**：Profile 存储时保存完整原生文件快照（settings.json + config.json、config.toml + auth.json、settings.json + .env），用于导入导出和配置回滚
+  - **迁移系统**（ProfileV2Migration）：
+    - 支持从**两套旧系统**迁移到新架构：
+      1. **原始工具配置**：`~/.claude/settings.{profile}.json`、`~/.codex/config.{profile}.toml + auth.{profile}.json`、`~/.gemini-cli/.env.{profile}`
+      2. **旧 profiles/ 目录系统**：`~/.duckcoding/profiles/{tool}/{profile}.{ext}` + `active/{tool}.json` + `metadata/index.json`
+    - 迁移逻辑：先从原始配置迁移创建 Profile，再从 profiles/ 目录补充（跳过重复），最后合并激活状态
+    - 清理机制：迁移完成后自动备份到 `backup_profile_v1_{timestamp}/` 并删除旧目录（profiles/、active/、metadata/）
+    - 手动清理：提供 `clean_legacy_backups` 命令删除备份的原始配置文件（settings.{profile}.json 等）
+  - **前端页面**（ProfileManagementPage）：
+    - Tab 分组布局：按工具（Claude Code、Codex、Gemini CLI）水平分页
+    - `ActiveProfileCard`：显示当前激活配置，支持工具实例选择器（Local/WSL/SSH）、版本信息、更新检测
+    - Profile 列表：支持创建、编辑、删除、激活、导入导出操作
+  - **Tauri 命令**（位于 `commands/profile_commands.rs`）：
+    - Profile CRUD：`list_profiles`、`create_profile`、`update_profile`、`delete_profile`、`activate_profile`
+    - 导入导出：`import_profile`、`export_profile`、`import_from_native`
+    - 原生同步：`sync_to_native`、`sync_from_native`
+  - **类型定义**（`types/profile.ts`）：
+    - `ProfileGroup`：工具分组，包含工具信息和 Profile 列表
+    - `ProfileDescriptor`：Profile 元数据（名称、格式、创建/更新时间、来源）
+    - `ProfilePayload`：联合类型，支持 Claude/Codex/Gemini 配置
 - **新用户引导系统**：
   - 首次启动强制引导，配置存储在 `GlobalConfig.onboarding_status: Option<OnboardingStatus>`（包含已完成版本、跳过步骤、完成时间）
   - 版本化管理，支持增量更新（v1 -> v2 只展示新增内容），独立的引导内容版本号（与应用版本解耦）

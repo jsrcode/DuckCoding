@@ -450,10 +450,8 @@ fn main() {
         check_update,
         check_all_updates,
         update_tool,
-        configure_api,
         list_profiles,
         switch_profile,
-        delete_profile,
         get_active_config,
         get_profile_config,
         save_global_config,
@@ -534,6 +532,16 @@ fn main() {
         // 单实例模式配置命令
         get_single_instance_config,
         update_single_instance_config,
+        // Profile 管理命令（v2.0）
+        pm_list_all_profiles,
+        pm_list_tool_profiles,
+        pm_get_profile,
+        pm_save_profile,
+        pm_delete_profile,
+        pm_activate_profile,
+        pm_get_active_profile_name,
+        pm_get_active_profile,
+        pm_capture_from_native,
     ]);
 
     // 使用自定义事件循环处理 macOS Reopen 事件

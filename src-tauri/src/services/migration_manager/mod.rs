@@ -8,25 +8,27 @@ mod migrations;
 
 pub use manager::MigrationManager;
 pub use migration_trait::{Migration, MigrationResult};
-pub use migrations::{ProfileMigration, ProxyConfigMigration, SessionConfigMigration, SqliteToJsonMigration};
+pub use migrations::{
+    ProfileV2Migration, ProxyConfigMigration, SessionConfigMigration, SqliteToJsonMigration,
+};
 
 use std::sync::Arc;
 
 /// 创建并初始化迁移管理器
 ///
 /// 自动注册所有迁移（按版本号执行）：
-/// - ProfileMigration (1.3.8) - Profile 配置迁移
 /// - SqliteToJsonMigration (1.3.9) - SQLite → JSON 迁移
 /// - ProxyConfigMigration (1.3.9) - Proxy 配置重构
 /// - SessionConfigMigration (1.3.9) - Session 配置拆分
+/// - ProfileV2Migration (2.0.0) - Profile v2.0 双文件系统迁移
 pub fn create_migration_manager() -> MigrationManager {
     let mut manager = MigrationManager::new();
 
-    // 注册所有迁移
-    manager.register(Arc::new(ProfileMigration::new()));
+    // 注册所有迁移（按目标版本号自动排序执行）
     manager.register(Arc::new(SqliteToJsonMigration::new()));
     manager.register(Arc::new(ProxyConfigMigration::new()));
     manager.register(Arc::new(SessionConfigMigration::new()));
+    manager.register(Arc::new(ProfileV2Migration::new()));
 
     tracing::debug!(
         "迁移管理器初始化完成，已注册 {} 个迁移",

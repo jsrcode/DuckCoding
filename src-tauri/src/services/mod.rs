@@ -10,8 +10,8 @@
 
 pub mod config;
 pub mod config_watcher;
-pub mod migration;
 pub mod migration_manager;
+pub mod profile_manager; // Profile管理（v2.0）
 pub mod profile_store;
 pub mod proxy;
 pub mod session;
@@ -21,8 +21,11 @@ pub mod update;
 // 重新导出服务
 pub use config::*;
 pub use config_watcher::*;
-pub use migration::*;
 pub use migration_manager::{create_migration_manager, MigrationManager};
+pub use profile_manager::{
+    ActiveStore, ClaudeProfile, CodexProfile, GeminiProfile, ProfileDescriptor, ProfileManager,
+    ProfilesStore,
+}; // Profile管理（v2.0）
 pub use profile_store::*;
 pub use proxy::*;
 // session 模块：明确导出避免 db 名称冲突

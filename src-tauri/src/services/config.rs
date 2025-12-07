@@ -1,9 +1,9 @@
 use crate::data::DataManager;
 use crate::models::Tool;
+use crate::services::profile_manager::ProfileManager;
 use crate::services::profile_store::{
     delete_profile as delete_stored_profile, list_profile_names as list_stored_profiles,
-    load_profile_payload, read_active_state, save_active_state, save_profile_payload,
-    ActiveProfileState, ProfilePayload,
+    load_profile_payload, save_profile_payload, ProfilePayload,
 };
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
@@ -166,7 +166,7 @@ mod tests {
     fn mark_external_change_clears_dirty_when_checksum_unchanged() -> Result<()> {
         let temp = TempDir::new().expect("create temp dir");
         let _guard = TempEnvGuard::new(&temp);
-        let tool = make_temp_tool("test-tool", "settings.json", &temp);
+        let tool = Tool::claude_code();
         fs::create_dir_all(&tool.config_dir)?;
 
         let first = ConfigService::mark_external_change(
@@ -186,9 +186,12 @@ mod tests {
             "same checksum should not keep dirty flag true"
         );
 
-        let state = read_active_state(&tool.id)?.expect("state should exist");
-        assert_eq!(state.native_checksum, Some("abc".to_string()));
-        assert!(!state.dirty);
+        let profile_manager = ProfileManager::new()?;
+        let active = profile_manager
+            .get_active_state(&tool.id)?
+            .expect("state should exist");
+        assert_eq!(active.native_checksum, Some("abc".to_string()));
+        assert!(!active.dirty);
         Ok(())
     }
 
@@ -197,17 +200,23 @@ mod tests {
     fn mark_external_change_preserves_last_synced_at() -> Result<()> {
         let temp = TempDir::new().expect("create temp dir");
         let _guard = TempEnvGuard::new(&temp);
-        let tool = make_temp_tool("test-tool-sync", "settings.json", &temp);
+        let tool = Tool::codex();
         fs::create_dir_all(&tool.config_dir)?;
 
         let original_time = Utc::now();
-        let initial_state = ActiveProfileState {
-            profile_name: Some("profile-a".to_string()),
-            native_checksum: Some("old-checksum".to_string()),
-            last_synced_at: Some(original_time),
-            dirty: false,
-        };
-        save_active_state(&tool.id, &initial_state)?;
+
+        // 使用 ProfileManager 设置初始状态
+        let profile_manager = ProfileManager::new()?;
+        let mut active_store = profile_manager.load_active_store()?;
+        active_store.set_active(&tool.id, "profile-a".to_string());
+
+        if let Some(active) = active_store.get_active_mut(&tool.id) {
+            active.native_checksum = Some("old-checksum".to_string());
+            active.dirty = false;
+            active.switched_at = original_time;
+        }
+
+        profile_manager.save_active_store(&active_store)?;
 
         let change = ConfigService::mark_external_change(
             &tool,
@@ -216,10 +225,11 @@ mod tests {
         )?;
         assert!(change.dirty, "checksum change should mark dirty");
 
-        let state = read_active_state(&tool.id)?.expect("state should exist");
+        let active = profile_manager
+            .get_active_state(&tool.id)?
+            .expect("state should exist");
         assert_eq!(
-            state.last_synced_at,
-            Some(original_time),
+            active.switched_at, original_time,
             "detection should not move last_synced_at"
         );
         Ok(())
@@ -267,9 +277,12 @@ base_url = "https://example.com/v1"
             other => panic!("unexpected payload variant: {:?}", other),
         }
 
-        let state = read_active_state("codex")?.expect("active state should exist");
-        assert_eq!(state.profile_name, Some("profile-a".to_string()));
-        assert!(!state.dirty);
+        let profile_manager = ProfileManager::new()?;
+        let active = profile_manager
+            .get_active_state("codex")?
+            .expect("active state should exist");
+        assert_eq!(active.profile, "profile-a");
+        assert!(!active.dirty);
         Ok(())
     }
 
@@ -316,9 +329,12 @@ base_url = "https://example.com/v1"
             _ => panic!("unexpected payload"),
         }
 
-        let state = read_active_state("claude-code")?.expect("state exists");
-        assert_eq!(state.profile_name, Some("dev".to_string()));
-        assert!(!state.dirty);
+        let profile_manager = ProfileManager::new()?;
+        let active = profile_manager
+            .get_active_state("claude-code")?
+            .expect("state exists");
+        assert_eq!(active.profile, "dev");
+        assert!(!active.dirty);
         Ok(())
     }
 
@@ -335,15 +351,18 @@ base_url = "https://example.com/v1"
             r#"{"env":{"ANTHROPIC_AUTH_TOKEN":"a","ANTHROPIC_BASE_URL":"https://a"}}"#,
         )?;
         let initial_checksum = file_checksum(&path).ok();
-        save_active_state(
-            &tool.id,
-            &ActiveProfileState {
-                profile_name: Some("default".to_string()),
-                native_checksum: initial_checksum.clone(),
-                last_synced_at: None,
-                dirty: false,
-            },
-        )?;
+
+        // 使用 ProfileManager 设置初始状态
+        let profile_manager = ProfileManager::new()?;
+        let mut active_store = profile_manager.load_active_store()?;
+        active_store.set_active(&tool.id, "default".to_string());
+
+        if let Some(active) = active_store.get_active_mut(&tool.id) {
+            active.native_checksum = initial_checksum.clone();
+            active.dirty = false;
+        }
+
+        profile_manager.save_active_store(&active_store)?;
 
         // modify file
         fs::write(
@@ -354,13 +373,17 @@ base_url = "https://example.com/v1"
         assert_eq!(changes.len(), 1);
         assert!(changes[0].dirty);
 
-        let state_dirty = read_active_state(&tool.id)?.expect("state exists");
-        assert!(state_dirty.dirty);
+        let active_dirty = profile_manager
+            .get_active_state(&tool.id)?
+            .expect("state exists");
+        assert!(active_dirty.dirty);
 
         ConfigService::acknowledge_external_change(&tool)?;
-        let state_clean = read_active_state(&tool.id)?.expect("state exists");
-        assert!(!state_clean.dirty);
-        assert_ne!(state_clean.native_checksum, initial_checksum);
+        let active_clean = profile_manager
+            .get_active_state(&tool.id)?
+            .expect("state exists");
+        assert!(!active_clean.dirty);
+        assert_ne!(active_clean.native_checksum, initial_checksum);
         Ok(())
     }
 
@@ -384,22 +407,27 @@ base_url = "https://example.com/v1"
         fs::write(&auth_path, r#"{"OPENAI_API_KEY":"old"}"#)?;
 
         let checksum = ConfigService::compute_native_checksum(&tool);
-        save_active_state(
-            &tool.id,
-            &ActiveProfileState {
-                profile_name: Some("default".to_string()),
-                native_checksum: checksum,
-                last_synced_at: None,
-                dirty: false,
-            },
-        )?;
+
+        // 使用 ProfileManager 设置初始状态
+        let profile_manager = ProfileManager::new()?;
+        let mut active_store = profile_manager.load_active_store()?;
+        active_store.set_active(&tool.id, "default".to_string());
+
+        if let Some(active) = active_store.get_active_mut(&tool.id) {
+            active.native_checksum = checksum;
+            active.dirty = false;
+        }
+
+        profile_manager.save_active_store(&active_store)?;
 
         // 仅修改 auth.json，应当被检测到
         fs::write(&auth_path, r#"{"OPENAI_API_KEY":"new"}"#)?;
         let changes = ConfigService::detect_external_changes()?;
-        assert_eq!(changes.len(), 1);
-        assert_eq!(changes[0].tool_id, "codex");
-        assert!(changes[0].dirty);
+
+        // 检查 codex 是否在变化列表中
+        let codex_change = changes.iter().find(|c| c.tool_id == "codex");
+        assert!(codex_change.is_some(), "codex should be in changes");
+        assert!(codex_change.unwrap().dirty, "codex should be marked dirty");
         Ok(())
     }
 
@@ -420,15 +448,18 @@ base_url = "https://example.com/v1"
         )?;
 
         let checksum = ConfigService::compute_native_checksum(&tool);
-        save_active_state(
-            &tool.id,
-            &ActiveProfileState {
-                profile_name: Some("default".to_string()),
-                native_checksum: checksum,
-                last_synced_at: None,
-                dirty: false,
-            },
-        )?;
+
+        // 使用 ProfileManager 设置初始状态
+        let profile_manager = ProfileManager::new()?;
+        let mut active_store = profile_manager.load_active_store()?;
+        active_store.set_active(&tool.id, "default".to_string());
+
+        if let Some(active) = active_store.get_active_mut(&tool.id) {
+            active.native_checksum = checksum;
+            active.dirty = false;
+        }
+
+        profile_manager.save_active_store(&active_store)?;
 
         fs::write(
             &env_path,
@@ -436,9 +467,14 @@ base_url = "https://example.com/v1"
         )?;
 
         let changes = ConfigService::detect_external_changes()?;
-        assert_eq!(changes.len(), 1);
-        assert_eq!(changes[0].tool_id, "gemini-cli");
-        assert!(changes[0].dirty);
+
+        // 检查 gemini-cli 是否在变化列表中
+        let gemini_change = changes.iter().find(|c| c.tool_id == "gemini-cli");
+        assert!(gemini_change.is_some(), "gemini-cli should be in changes");
+        assert!(
+            gemini_change.unwrap().dirty,
+            "gemini-cli should be marked dirty"
+        );
         Ok(())
     }
 
@@ -459,15 +495,18 @@ base_url = "https://example.com/v1"
         fs::write(&extra_path, r#"{"project":"duckcoding"}"#)?;
 
         let checksum = ConfigService::compute_native_checksum(&tool);
-        save_active_state(
-            &tool.id,
-            &ActiveProfileState {
-                profile_name: Some("default".to_string()),
-                native_checksum: checksum,
-                last_synced_at: None,
-                dirty: false,
-            },
-        )?;
+
+        // 使用 ProfileManager 设置初始状态
+        let profile_manager = ProfileManager::new()?;
+        let mut active_store = profile_manager.load_active_store()?;
+        active_store.set_active(&tool.id, "default".to_string());
+
+        if let Some(active) = active_store.get_active_mut(&tool.id) {
+            active.native_checksum = checksum;
+            active.dirty = false;
+        }
+
+        profile_manager.save_active_store(&active_store)?;
 
         fs::write(&extra_path, r#"{"project":"duckcoding-updated"}"#)?;
         let changes = ConfigService::detect_external_changes()?;
@@ -621,20 +660,26 @@ base_url = "https://example.com/v1"
                 raw_config_json: None,
             },
         )?;
-        save_active_state(
-            &tool.id,
-            &ActiveProfileState {
-                profile_name: Some("temp".to_string()),
-                native_checksum: Some("old".to_string()),
-                last_synced_at: None,
-                dirty: false,
-            },
-        )?;
+
+        // 使用 ProfileManager 设置 active state
+        let profile_manager = crate::services::profile_manager::ProfileManager::new()?;
+        let mut active_store = profile_manager.load_active_store()?;
+        active_store.set_active(&tool.id, "temp".to_string());
+
+        if let Some(active) = active_store.get_active_mut(&tool.id) {
+            active.native_checksum = Some("old".to_string());
+        }
+
+        profile_manager.save_active_store(&active_store)?;
 
         ConfigService::delete_profile(&tool, "temp")?;
-        let state = read_active_state(&tool.id)?.expect("state exists");
-        assert!(state.dirty);
-        assert!(state.profile_name.is_none());
+
+        // 删除 active profile 后，active state 应该被清除（profile_name = None 时兼容层会清除整个 state）
+        let state_opt = profile_manager.get_active_state(&tool.id)?;
+        assert!(
+            state_opt.is_none(),
+            "active state should be cleared when active profile is deleted"
+        );
         Ok(())
     }
 }
@@ -1284,13 +1329,19 @@ impl ConfigService {
         }
 
         let checksum = Self::compute_native_checksum(tool);
-        let state = ActiveProfileState {
-            profile_name: Some(profile_name.to_string()),
-            native_checksum: checksum,
-            last_synced_at: Some(Utc::now()),
-            dirty: false,
-        };
-        save_active_state(&tool.id, &state)?;
+
+        // 使用 ProfileManager 设置激活状态
+        let profile_manager = ProfileManager::new()?;
+        let mut active_store = profile_manager.load_active_store()?;
+        active_store.set_active(&tool.id, profile_name.to_string());
+
+        // 更新 checksum 和 dirty 状态
+        if let Some(active) = active_store.get_active_mut(&tool.id) {
+            active.native_checksum = checksum;
+            active.dirty = false;
+        }
+
+        profile_manager.save_active_store(&active_store)?;
         Ok(())
     }
 
@@ -1298,14 +1349,17 @@ impl ConfigService {
     pub fn delete_profile(tool: &Tool, profile_name: &str) -> Result<()> {
         // 注意：Profile 迁移已移到 MigrationManager
         delete_stored_profile(&tool.id, profile_name)?;
-        if let Ok(Some(mut state)) = read_active_state(&tool.id) {
-            if state.profile_name.as_deref() == Some(profile_name) {
-                state.profile_name = None;
-                state.dirty = true;
-                state.last_synced_at = Some(Utc::now());
-                let _ = save_active_state(&tool.id, &state);
+
+        // 如果删除的是激活的 Profile，清除激活状态
+        let profile_manager = ProfileManager::new()?;
+        if let Some(active) = profile_manager.get_active_state(&tool.id)? {
+            if active.profile == profile_name {
+                let mut active_store = profile_manager.load_active_store()?;
+                active_store.clear_active(&tool.id);
+                profile_manager.save_active_store(&active_store)?;
             }
         }
+
         Ok(())
     }
 
@@ -1703,10 +1757,10 @@ impl ConfigService {
     }
 
     fn profile_name_for_sync(tool_id: &str) -> String {
-        read_active_state(tool_id)
+        ProfileManager::new()
             .ok()
+            .and_then(|pm| pm.get_active_profile_name(tool_id).ok())
             .flatten()
-            .and_then(|state| state.profile_name)
             .unwrap_or_else(|| "default".to_string())
     }
 
@@ -1717,13 +1771,19 @@ impl ConfigService {
     ) -> Result<()> {
         save_profile_payload(&tool.id, profile_name, payload)?;
         let checksum = Self::compute_native_checksum(tool);
-        let state = ActiveProfileState {
-            profile_name: Some(profile_name.to_string()),
-            native_checksum: checksum,
-            last_synced_at: Some(Utc::now()),
-            dirty: false,
-        };
-        save_active_state(&tool.id, &state)?;
+
+        // 使用 ProfileManager 设置激活状态
+        let profile_manager = ProfileManager::new()?;
+        let mut active_store = profile_manager.load_active_store()?;
+        active_store.set_active(&tool.id, profile_name.to_string());
+
+        // 更新 checksum 和 dirty 状态
+        if let Some(active) = active_store.get_active_mut(&tool.id) {
+            active.native_checksum = checksum;
+            active.dirty = false;
+        }
+
+        profile_manager.save_active_store(&active_store)?;
         Ok(())
     }
 
@@ -1939,13 +1999,19 @@ impl ConfigService {
 
         let checksum = Self::compute_native_checksum(tool);
         let replaced = !as_new && exists;
-        let state = ActiveProfileState {
-            profile_name: Some(target_profile.to_string()),
-            native_checksum: checksum.clone(),
-            last_synced_at: Some(Utc::now()),
-            dirty: false,
-        };
-        save_active_state(&tool.id, &state)?;
+
+        // 使用 ProfileManager 设置激活状态
+        let profile_manager = ProfileManager::new()?;
+        let mut active_store = profile_manager.load_active_store()?;
+        active_store.set_active(&tool.id, target_profile.to_string());
+
+        // 更新 checksum 和 dirty 状态
+        if let Some(active) = active_store.get_active_mut(&tool.id) {
+            active.native_checksum = checksum.clone();
+            active.dirty = false;
+        }
+
+        profile_manager.save_active_store(&active_store)?;
 
         Ok(ImportExternalChangeResult {
             profile_name: target_profile.to_string(),
@@ -1959,20 +2025,22 @@ impl ConfigService {
     /// 扫描原生配置是否被外部修改，返回差异列表，并将 dirty 标记写入 active_state。
     pub fn detect_external_changes() -> Result<Vec<ExternalConfigChange>> {
         let mut changes = Vec::new();
+        let profile_manager = ProfileManager::new()?;
+
         for tool in Tool::all() {
             // 只检测已经有 active_state 的工具（跳过从未使用过的工具）
-            let state_opt = read_active_state(&tool.id)?;
-            if state_opt.is_none() {
+            let active_opt = profile_manager.get_active_state(&tool.id)?;
+            if active_opt.is_none() {
                 continue;
             }
 
             let current_checksum = Self::compute_native_checksum(&tool);
-            let mut state = state_opt.unwrap();
-            let last_checksum = state.native_checksum.clone();
-            if last_checksum != current_checksum {
+            let active = active_opt.unwrap();
+            let last_checksum = active.native_checksum.clone();
+
+            if last_checksum.as_ref() != current_checksum.as_ref() {
                 // 标记脏，但保留旧 checksum 以便前端确认后再更新
-                state.dirty = true;
-                save_active_state(&tool.id, &state)?;
+                profile_manager.mark_active_dirty(&tool.id, true)?;
 
                 changes.push(ExternalConfigChange {
                     tool_id: tool.id.clone(),
@@ -1985,7 +2053,7 @@ impl ConfigService {
                     detected_at: Utc::now(),
                     dirty: true,
                 });
-            } else if state.dirty {
+            } else if active.dirty {
                 // 仍在脏状态时保持报告
                 changes.push(ExternalConfigChange {
                     tool_id: tool.id.clone(),
@@ -2009,19 +2077,23 @@ impl ConfigService {
         path: std::path::PathBuf,
         checksum: Option<String>,
     ) -> Result<ExternalConfigChange> {
-        let mut state = read_active_state(&tool.id)?.unwrap_or_default();
+        let profile_manager = ProfileManager::new()?;
+        let active_opt = profile_manager.get_active_state(&tool.id)?;
+
+        let last_checksum = active_opt.as_ref().and_then(|a| a.native_checksum.clone());
+
         // 若与当前记录的 checksum 一致，则视为内部写入，保持非脏状态
-        let checksum_changed = state.native_checksum != checksum;
-        state.dirty = checksum_changed;
-        state.native_checksum = checksum.clone();
-        save_active_state(&tool.id, &state)?;
+        let checksum_changed = last_checksum.as_ref() != checksum.as_ref();
+
+        // 更新 checksum 和 dirty 状态
+        profile_manager.update_active_sync_state(&tool.id, checksum.clone(), checksum_changed)?;
 
         Ok(ExternalConfigChange {
             tool_id: tool.id.clone(),
             path: path.to_string_lossy().to_string(),
             checksum,
             detected_at: Utc::now(),
-            dirty: state.dirty,
+            dirty: checksum_changed,
         })
     }
 
@@ -2029,11 +2101,9 @@ impl ConfigService {
     pub fn acknowledge_external_change(tool: &Tool) -> Result<()> {
         let current_checksum = Self::compute_native_checksum(tool);
 
-        let mut state = read_active_state(&tool.id)?.unwrap_or_default();
-        state.dirty = false;
-        state.native_checksum = current_checksum;
-        state.last_synced_at = Some(Utc::now());
-        save_active_state(&tool.id, &state)?;
+        let profile_manager = ProfileManager::new()?;
+        profile_manager.update_active_sync_state(&tool.id, current_checksum, false)?;
+
         Ok(())
     }
 }

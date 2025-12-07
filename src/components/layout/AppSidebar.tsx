@@ -3,8 +3,8 @@ import { Separator } from '@/components/ui/separator';
 import {
   LayoutDashboard,
   Wrench,
-  Key,
   ArrowRightLeft,
+  Settings2,
   BarChart3,
   Wallet,
   Radio,
@@ -81,23 +81,23 @@ export function AppSidebar({ activeTab, onTabChange, restrictNavigation }: AppSi
         </Button> */}
 
         <Button
-          variant={activeTab === 'config' ? 'default' : 'ghost'}
-          className="w-full justify-start transition-all hover:scale-105"
-          onClick={() => handleTabChange('config')}
-          disabled={restrictNavigation && activeTab !== 'config'}
-        >
-          <Key className="mr-2 h-4 w-4" />
-          配置 API
-        </Button>
-
-        <Button
           variant={activeTab === 'switch' ? 'default' : 'ghost'}
           className="w-full justify-start transition-all hover:scale-105"
           onClick={() => handleTabChange('switch')}
           disabled={restrictNavigation && activeTab !== 'switch'}
         >
           <ArrowRightLeft className="mr-2 h-4 w-4" />
-          切换配置
+          高级设置
+        </Button>
+
+        <Button
+          variant={activeTab === 'profile-management' ? 'default' : 'ghost'}
+          className="w-full justify-start transition-all hover:scale-105"
+          onClick={() => handleTabChange('profile-management')}
+          disabled={restrictNavigation && activeTab !== 'profile-management'}
+        >
+          <Settings2 className="mr-2 h-4 w-4" />
+          配置管理
         </Button>
 
         <Button

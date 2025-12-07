@@ -23,6 +23,11 @@ pub use services::version::VersionService;
 pub use services::tool::ToolRegistry;
 // Re-export migration manager
 pub use services::migration_manager::{create_migration_manager, MigrationManager};
+// Re-export profile manager (v2.1)
+pub use services::profile_manager::{
+    ActiveStore, ClaudeProfile, CodexProfile, GeminiProfile, ProfileDescriptor, ProfileManager,
+    ProfilesStore,
+};
 // Re-export new proxy architecture types
 pub use models::ToolProxyConfig;
 pub use services::proxy::{ProxyInstance, ProxyManager, RequestProcessor};

@@ -85,7 +85,11 @@ impl ToolDetector for ClaudeCodeDetector {
     async fn detect_install_method(&self, executor: &CommandExecutor) -> Option<InstallMethod> {
         // 检查是否通过 npm 安装
         if executor.command_exists_async("npm").await {
-            let stderr_redirect = if cfg!(windows) { "2>nul" } else { "2>/dev/null" };
+            let stderr_redirect = if cfg!(windows) {
+                "2>nul"
+            } else {
+                "2>/dev/null"
+            };
             let cmd = format!("npm list -g @anthropic-ai/claude-code {stderr_redirect}");
             let result = executor.execute_async(&cmd).await;
             if result.success {

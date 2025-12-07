@@ -12,6 +12,12 @@ use async_trait::async_trait;
 /// Session 配置拆分迁移（目标版本 1.3.9）
 pub struct SessionConfigMigration;
 
+impl Default for SessionConfigMigration {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SessionConfigMigration {
     pub fn new() -> Self {
         Self

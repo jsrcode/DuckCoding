@@ -9,13 +9,12 @@ use ::duckcoding::services::config::{
     ClaudeSettingsPayload, CodexSettingsPayload, ExternalConfigChange, GeminiEnvPayload,
     GeminiSettingsPayload, ImportExternalChangeResult,
 };
-use ::duckcoding::services::migration::LegacyCleanupResult;
+use ::duckcoding::services::profile_manager::ProfileManager;
 use ::duckcoding::services::profile_store::{
-    list_descriptors as list_profile_descriptors_internal, read_active_state, read_migration_log,
+    list_descriptors as list_profile_descriptors_internal, read_migration_log, LegacyCleanupResult,
     MigrationRecord, ProfileDescriptor,
 };
 use ::duckcoding::services::proxy::{ProxyConfig, TransparentProxyConfigService};
-use ::duckcoding::services::MigrationService;
 use ::duckcoding::utils::config::{
     apply_proxy_if_configured, read_global_config, write_global_config,
 };
@@ -249,33 +248,6 @@ fn detect_profile_name(
 }
 
 // ==================== Tauri 命令 ====================
-
-#[tauri::command]
-pub async fn configure_api(
-    tool: String,
-    _provider: String,
-    api_key: String,
-    base_url: Option<String>,
-    profile_name: Option<String>,
-) -> Result<(), String> {
-    #[cfg(debug_assertions)]
-    tracing::debug!(tool = %tool, "配置API（使用ConfigService）");
-
-    // 获取工具定义
-    let tool_obj = Tool::by_id(&tool).ok_or_else(|| format!("❌ 未知的工具: {tool}"))?;
-
-    // 获取 base_url，根据工具类型使用不同的默认值
-    let base_url_str = base_url.unwrap_or_else(|| match tool.as_str() {
-        "codex" => "https://jp.duckcoding.com/v1".to_string(),
-        _ => "https://jp.duckcoding.com".to_string(),
-    });
-
-    // 使用 ConfigService 应用配置
-    ConfigService::apply_config(&tool_obj, &api_key, &base_url_str, profile_name.as_deref())
-        .map_err(|e| e.to_string())?;
-
-    Ok(())
-}
 
 #[tauri::command]
 pub async fn list_profiles(tool: String) -> Result<Vec<String>, String> {
@@ -521,27 +493,6 @@ pub async fn switch_profile(
     Ok(())
 }
 
-#[tauri::command]
-pub async fn delete_profile(tool: String, profile: String) -> Result<(), String> {
-    #[cfg(debug_assertions)]
-    tracing::debug!(
-        tool = %tool,
-        profile = %profile,
-        "删除配置文件"
-    );
-
-    // 获取工具定义
-    let tool_obj = Tool::by_id(&tool).ok_or_else(|| format!("❌ 未知的工具: {tool}"))?;
-
-    // 使用 ConfigService 删除配置
-    ConfigService::delete_profile(&tool_obj, &profile).map_err(|e| e.to_string())?;
-
-    #[cfg(debug_assertions)]
-    tracing::debug!(profile = %profile, "配置文件删除成功");
-
-    Ok(())
-}
-
 /// 获取迁移报告
 #[tauri::command]
 pub async fn get_migration_report() -> Result<Vec<MigrationRecord>, String> {
@@ -574,7 +525,102 @@ pub async fn ack_external_change(tool: String) -> Result<(), String> {
 /// 清理旧版备份文件（一次性）
 #[tauri::command]
 pub async fn clean_legacy_backups() -> Result<Vec<LegacyCleanupResult>, String> {
-    MigrationService::cleanup_legacy_backups().map_err(|e| e.to_string())
+    use std::path::PathBuf;
+
+    fn cleanup_tool_backups(
+        tool_id: &str,
+        config_dir: PathBuf,
+        patterns: Vec<(&str, &str)>,
+    ) -> Result<LegacyCleanupResult, String> {
+        let mut removed = Vec::new();
+        let mut failed = Vec::new();
+
+        if !config_dir.exists() {
+            return Ok(LegacyCleanupResult {
+                tool_id: tool_id.to_string(),
+                removed,
+                failed,
+            });
+        }
+
+        for entry in fs::read_dir(&config_dir).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let path = entry.path();
+            let name = match path.file_name().and_then(|s| s.to_str()) {
+                Some(n) => n,
+                None => continue,
+            };
+
+            let should_remove = patterns.iter().any(|(prefix, suffix)| {
+                name.starts_with(prefix)
+                    && name.ends_with(suffix)
+                    && name != format!("{}{}", prefix, suffix)
+            });
+
+            if should_remove {
+                match fs::remove_file(&path) {
+                    Ok(_) => removed.push(path.clone()),
+                    Err(err) => failed.push((path.clone(), err.to_string())),
+                }
+            }
+        }
+
+        Ok(LegacyCleanupResult {
+            tool_id: tool_id.to_string(),
+            removed,
+            failed,
+        })
+    }
+
+    let home_dir = dirs::home_dir().ok_or("无法获取用户主目录")?;
+
+    // 清理 Claude Code 备份文件
+    let claude_result = cleanup_tool_backups(
+        "claude-code",
+        home_dir.join(".claude"),
+        vec![("settings.", ".json")],
+    )?;
+
+    // 清理 Codex 备份文件
+    let mut codex_removed = Vec::new();
+    let mut codex_failed = Vec::new();
+    let codex_dir = home_dir.join(".codex");
+    if codex_dir.exists() {
+        for entry in fs::read_dir(&codex_dir).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let path = entry.path();
+            let name = match path.file_name().and_then(|s| s.to_str()) {
+                Some(n) => n,
+                None => continue,
+            };
+
+            let should_remove = (name.starts_with("config.")
+                && name.ends_with(".toml")
+                && name != "config.toml")
+                || (name.starts_with("auth.") && name.ends_with(".json") && name != "auth.json");
+
+            if should_remove {
+                match fs::remove_file(&path) {
+                    Ok(_) => codex_removed.push(path.clone()),
+                    Err(err) => codex_failed.push((path.clone(), err.to_string())),
+                }
+            }
+        }
+    }
+    let codex_result = LegacyCleanupResult {
+        tool_id: "codex".to_string(),
+        removed: codex_removed,
+        failed: codex_failed,
+    };
+
+    // 清理 Gemini CLI 备份文件
+    let gemini_result = cleanup_tool_backups(
+        "gemini-cli",
+        home_dir.join(".gemini-cli"),
+        vec![(".env.", "")],
+    )?;
+
+    Ok(vec![claude_result, codex_result, gemini_result])
 }
 
 /// 将外部修改导入集中仓
@@ -630,13 +676,17 @@ pub async fn get_active_config(tool: String) -> Result<ActiveConfig, String> {
                 .unwrap_or("未配置");
 
             // 检测配置名称：优先集中仓元数据，其次回退旧目录扫描
-            let profile_name = if let Ok(Some(state)) = read_active_state("claude-code") {
-                state.profile_name
-            } else if !raw_api_key.is_empty() && base_url != "未配置" {
-                detect_profile_name("claude-code", raw_api_key, base_url, &home_dir)
-            } else {
-                None
-            };
+            let profile_name = ProfileManager::new()
+                .ok()
+                .and_then(|pm| pm.get_active_profile_name("claude-code").ok())
+                .flatten()
+                .or_else(|| {
+                    if !raw_api_key.is_empty() && base_url != "未配置" {
+                        detect_profile_name("claude-code", raw_api_key, base_url, &home_dir)
+                    } else {
+                        None
+                    }
+                });
 
             Ok(ActiveConfig {
                 api_key,
@@ -706,13 +756,17 @@ pub async fn get_active_config(tool: String) -> Result<ActiveConfig, String> {
             }
 
             // 检测配置名称
-            let profile_name = if let Ok(Some(state)) = read_active_state("codex") {
-                state.profile_name
-            } else if !raw_api_key.is_empty() && base_url != "未配置" {
-                detect_profile_name("codex", &raw_api_key, &base_url, &home_dir)
-            } else {
-                None
-            };
+            let profile_name = ProfileManager::new()
+                .ok()
+                .and_then(|pm| pm.get_active_profile_name("codex").ok())
+                .flatten()
+                .or_else(|| {
+                    if !raw_api_key.is_empty() && base_url != "未配置" {
+                        detect_profile_name("codex", &raw_api_key, &base_url, &home_dir)
+                    } else {
+                        None
+                    }
+                });
 
             Ok(ActiveConfig {
                 api_key,
@@ -756,13 +810,17 @@ pub async fn get_active_config(tool: String) -> Result<ActiveConfig, String> {
             }
 
             // 检测配置名称
-            let profile_name = if let Ok(Some(state)) = read_active_state("gemini-cli") {
-                state.profile_name
-            } else if !raw_api_key.is_empty() && base_url != "未配置" {
-                detect_profile_name("gemini-cli", &raw_api_key, &base_url, &home_dir)
-            } else {
-                None
-            };
+            let profile_name = ProfileManager::new()
+                .ok()
+                .and_then(|pm| pm.get_active_profile_name("gemini-cli").ok())
+                .flatten()
+                .or_else(|| {
+                    if !raw_api_key.is_empty() && base_url != "未配置" {
+                        detect_profile_name("gemini-cli", &raw_api_key, &base_url, &home_dir)
+                    } else {
+                        None
+                    }
+                });
 
             Ok(ActiveConfig {
                 api_key,

@@ -24,7 +24,9 @@ impl InstallerService {
             .ok_or_else(|| anyhow::anyhow!("未知的工具 ID: {}", tool.id))?;
 
         tracing::info!("使用 Detector 安装工具: {}", tool.name);
-        detector.install(&self.command_executor, method, force).await
+        detector
+            .install(&self.command_executor, method, force)
+            .await
     }
 
     /// 更新工具（委托给 Detector）

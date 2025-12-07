@@ -75,9 +75,8 @@ pub struct SSHToolInstance {
     pub updated_at: i64,
 }
 
-impl ToolsConfig {
-    /// 创建默认配置
-    pub fn default() -> Self {
+impl Default for ToolsConfig {
+    fn default() -> Self {
         ToolsConfig {
             version: "1.0.0".to_string(),
             updated_at: chrono::Utc::now().to_rfc3339(),
@@ -106,7 +105,9 @@ impl ToolsConfig {
             ],
         }
     }
+}
 
+impl ToolsConfig {
     /// 转换为扁平的 ToolInstance 列表
     pub fn to_instances(&self) -> Vec<ToolInstance> {
         let mut instances = Vec::new();
@@ -184,7 +185,7 @@ impl ToolsConfig {
         for instance in instances {
             grouped
                 .entry(instance.base_id.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(instance);
         }
 

@@ -5,11 +5,10 @@ import { AppSidebar } from '@/components/layout/AppSidebar';
 import { CloseActionDialog } from '@/components/dialogs/CloseActionDialog';
 import { UpdateDialog } from '@/components/dialogs/UpdateDialog';
 import { StatisticsPage } from '@/pages/StatisticsPage';
-import { BalancePage } from '@/pages/BalancePage';
 import { InstallationPage } from '@/pages/InstallationPage';
 import { DashboardPage } from '@/pages/DashboardPage';
-import { ConfigurationPage } from '@/pages/ConfigurationPage';
 import { ProfileSwitchPage } from '@/pages/ProfileSwitchPage';
+import ProfileManagementPage from '@/pages/ProfileManagementPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { TransparentProxyPage } from '@/pages/TransparentProxyPage';
 import { ToolManagementPage } from '@/pages/ToolManagementPage';
@@ -18,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAppEvents } from '@/hooks/useAppEvents';
 import { useCloseAction } from '@/hooks/useCloseAction';
 import { Toaster } from '@/components/ui/toaster';
+import { BalancePage } from '@/pages/BalancePage';
 import OnboardingOverlay from '@/components/Onboarding/OnboardingOverlay';
 import {
   getRequiredSteps,
@@ -43,8 +43,8 @@ type TabType =
   | 'dashboard'
   | 'tool-management'
   | 'install'
-  | 'config'
   | 'switch'
+  | 'profile-management'
   | 'statistics'
   | 'balance'
   | 'transparent-proxy'
@@ -340,10 +340,6 @@ function App() {
         description: message,
       });
     },
-    onNavigateToConfig: (detail) => {
-      setActiveTab('config');
-      console.log('Navigate to config:', detail);
-    },
     onNavigateToInstall: () => setActiveTab('install'),
     onNavigateToSettings: (detail) => {
       setSettingsInitialTab(detail?.tab ?? 'basic');
@@ -387,8 +383,9 @@ function App() {
             <ToolManagementPage tools={tools} loading={toolsLoading} />
           )}
           {activeTab === 'install' && <InstallationPage tools={tools} loading={toolsLoading} />}
-          {activeTab === 'config' && <ConfigurationPage tools={tools} loading={toolsLoading} />}
           {activeTab === 'switch' && <ProfileSwitchPage tools={tools} loading={toolsLoading} />}
+          {activeTab === 'balance' && <BalancePage />}
+          {activeTab === 'profile-management' && <ProfileManagementPage />}
           {activeTab === 'statistics' && (
             <StatisticsPage
               globalConfig={globalConfig}
@@ -400,7 +397,6 @@ function App() {
               onLoadStatistics={loadStatistics}
             />
           )}
-          {activeTab === 'balance' && <BalancePage />}
           {activeTab === 'transparent-proxy' && (
             <TransparentProxyPage selectedToolId={selectedProxyToolId} />
           )}
