@@ -8,7 +8,7 @@ import { UpdateCheckBanner } from './components/UpdateCheckBanner';
 import { useDashboard } from './hooks/useDashboard';
 import { getToolDisplayName } from '@/utils/constants';
 import { useToast } from '@/hooks/use-toast';
-import { refreshToolStatus, type ToolStatus } from '@/lib/tauri-commands';
+import { refreshAllToolVersions, type ToolStatus } from '@/lib/tauri-commands';
 
 interface DashboardPageProps {
   tools: ToolStatus[];
@@ -44,19 +44,19 @@ export function DashboardPage({ tools: toolsProp, loading: loadingProp }: Dashbo
   //   window.dispatchEvent(new CustomEvent('refresh-tools'));
   // };
 
-  // 手动刷新工具状态（清除缓存重新检测）
+  // 手动刷新工具状态（刷新数据库版本号）
   const handleRefreshToolStatus = async () => {
     setRefreshing(true);
     try {
-      const newTools = await refreshToolStatus();
+      const newTools = await refreshAllToolVersions();
       updateTools(newTools);
       toast({
-        title: '检测完成',
-        description: '工具安装状态已更新',
+        title: '刷新完成',
+        description: '工具版本号已更新',
       });
     } catch (error) {
       toast({
-        title: '检测失败',
+        title: '刷新失败',
         description: String(error),
         variant: 'destructive',
       });

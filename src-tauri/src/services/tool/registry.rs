@@ -159,8 +159,8 @@ impl ToolRegistry {
             }
         });
 
-        let instance_id = format!("{}-local", tool_id);
         let now = chrono::Utc::now().timestamp();
+        let instance_id = format!("{}-local-{}", tool_id, now);
 
         ToolInstance {
             instance_id,
@@ -184,7 +184,8 @@ impl ToolRegistry {
     /// 工作流程：
     /// 1. 删除该工具的所有现有本地实例（避免重复）
     /// 2. 执行检测
-    /// 3. 如果检测到，保存到数据库
+    /// 3. 检查路径是否与其他工具冲突
+    /// 4. 如果检测到且无冲突，保存到数据库
     ///
     /// 返回：工具实例
     pub async fn detect_and_persist_single_tool(&self, tool_id: &str) -> Result<ToolInstance> {
@@ -198,7 +199,7 @@ impl ToolRegistry {
         // 1. 删除该工具的所有本地实例（避免重复）
         let db = self.db.lock().await;
         let all_instances = db.get_all_instances()?;
-        for inst in all_instances {
+        for inst in &all_instances {
             if inst.base_id == tool_id && inst.tool_type == ToolType::Local {
                 tracing::info!("删除旧实例: {}", inst.instance_id);
                 let _ = db.delete_instance(&inst.instance_id);
@@ -209,7 +210,29 @@ impl ToolRegistry {
         // 2. 执行检测
         let instance = self.detect_single_tool_by_detector(detector).await;
 
-        // 3. 保存到数据库
+        // 3. 检查路径冲突（如果检测到路径）
+        if instance.installed {
+            if let Some(detected_path) = &instance.install_path {
+                let db = self.db.lock().await;
+                let all_instances = db.get_all_instances()?;
+                drop(db);
+
+                // 检查是否有其他工具使用了相同路径
+                if let Some(existing) = all_instances.iter().find(|inst| {
+                    inst.install_path.as_ref() == Some(detected_path)
+                        && inst.tool_type == ToolType::Local
+                        && inst.base_id != tool_id // 排除同一工具
+                }) {
+                    return Err(anyhow::anyhow!(
+                        "路径冲突：检测到的路径 {} 已被 {} 使用",
+                        detected_path,
+                        existing.tool_name
+                    ));
+                }
+            }
+        }
+
+        // 4. 保存到数据库
         let db = self.db.lock().await;
         if instance.installed {
             db.upsert_instance(&instance)?;

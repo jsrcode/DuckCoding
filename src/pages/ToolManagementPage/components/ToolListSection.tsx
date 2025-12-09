@@ -147,7 +147,7 @@ export function ToolListSection({
                         <Button
                           size="sm"
                           variant="default"
-                          disabled={isUpdating}
+                          disabled={isUpdating || !!checkingUpdate}
                           onClick={() => onUpdate(instance.instance_id)}
                         >
                           <Download className="h-3 w-3 mr-1" />
@@ -157,7 +157,7 @@ export function ToolListSection({
                         <Button
                           size="sm"
                           variant="outline"
-                          disabled={!instance.installed || isChecking}
+                          disabled={!instance.installed || !!checkingUpdate || isUpdating}
                           onClick={() => onCheckUpdate(instance.instance_id)}
                           title="检测是否有新版本"
                         >

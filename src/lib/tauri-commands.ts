@@ -229,6 +229,23 @@ export async function checkUpdate(tool: string): Promise<UpdateResult> {
   return await invoke<UpdateResult>('check_update', { tool });
 }
 
+/**
+ * 检查工具更新（基于实例ID，使用配置的路径检测版本）
+ * @param instanceId 工具实例ID
+ * @returns 更新信息
+ */
+export async function checkUpdateForInstance(instanceId: string): Promise<UpdateResult> {
+  return await invoke<UpdateResult>('check_update_for_instance', { instanceId });
+}
+
+/**
+ * 刷新数据库中所有工具的版本号（使用配置的路径检测）
+ * @returns 更新后的工具状态列表
+ */
+export async function refreshAllToolVersions(): Promise<ToolStatus[]> {
+  return await invoke<ToolStatus[]>('refresh_all_tool_versions');
+}
+
 export async function checkAllUpdates(): Promise<UpdateResult[]> {
   return await invoke<UpdateResult[]>('check_all_updates');
 }
@@ -736,22 +753,6 @@ export async function addSshToolInstance(
  */
 export async function deleteToolInstance(instanceId: string): Promise<void> {
   return await invoke<void>('delete_tool_instance', { instanceId });
-}
-
-/**
- * 检查数据库中是否已有本地工具数据
- * @returns 是否已有本地工具数据
- */
-export async function hasToolsInDatabase(): Promise<boolean> {
-  return await invoke<boolean>('has_tools_in_database');
-}
-
-/**
- * 检测本地工具并保存到数据库（用于新手引导）
- * @returns 检测到的工具实例列表
- */
-export async function detectAndSaveTools(): Promise<ToolInstance[]> {
-  return await invoke<ToolInstance[]>('detect_and_save_tools');
 }
 
 // ==================== 单实例模式配置命令 ====================

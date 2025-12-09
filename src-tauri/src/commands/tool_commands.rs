@@ -195,6 +195,217 @@ pub async fn check_update(tool: String) -> Result<UpdateResult, String> {
     }
 }
 
+/// 解析版本号字符串，处理特殊格式
+///
+/// 支持格式：
+/// - "2.0.61" -> "2.0.61"
+/// - "2.0.61 (Claude Code)" -> "2.0.61"
+/// - "codex-cli 0.65.0" -> "0.65.0"
+/// - "v1.2.3" -> "1.2.3"
+fn parse_version_string(raw: &str) -> String {
+    let trimmed = raw.trim();
+
+    // 1. 处理括号格式：2.0.61 (Claude Code) -> 2.0.61
+    if let Some(idx) = trimmed.find('(') {
+        return trimmed[..idx].trim().to_string();
+    }
+
+    // 2. 处理空格分隔格式：codex-cli 0.65.0 -> 0.65.0
+    let parts: Vec<&str> = trimmed.split_whitespace().collect();
+    if parts.len() > 1 {
+        // 查找第一个以数字开头的部分
+        for part in parts {
+            if part.chars().next().is_some_and(|c| c.is_numeric()) {
+                return part.trim_start_matches('v').to_string();
+            }
+        }
+    }
+
+    // 3. 移除 'v' 前缀：v1.2.3 -> 1.2.3
+    trimmed.trim_start_matches('v').to_string()
+}
+
+/// 检查工具更新（基于实例ID，使用配置的路径）
+///
+/// 工作流程：
+/// 1. 从数据库获取实例信息
+/// 2. 使用 install_path 执行 --version 获取当前版本
+/// 3. 检查远程最新版本
+///
+/// 返回：更新信息
+#[tauri::command]
+pub async fn check_update_for_instance(
+    instance_id: String,
+    _registry_state: tauri::State<'_, ToolRegistryState>,
+) -> Result<UpdateResult, String> {
+    use ::duckcoding::models::ToolType;
+    use ::duckcoding::services::tool::ToolInstanceDB;
+    use std::process::Command;
+
+    // 1. 从数据库获取实例信息
+    let db = ToolInstanceDB::new().map_err(|e| format!("初始化数据库失败: {}", e))?;
+    let all_instances = db
+        .get_all_instances()
+        .map_err(|e| format!("读取数据库失败: {}", e))?;
+
+    let instance = all_instances
+        .iter()
+        .find(|inst| inst.instance_id == instance_id && inst.tool_type == ToolType::Local)
+        .ok_or_else(|| format!("未找到实例: {}", instance_id))?;
+
+    // 2. 使用 install_path 执行 --version 获取当前版本
+    let current_version = if let Some(path) = &instance.install_path {
+        let version_cmd = format!("{} --version", path);
+
+        #[cfg(target_os = "windows")]
+        let output = Command::new("cmd").arg("/C").arg(&version_cmd).output();
+
+        #[cfg(not(target_os = "windows"))]
+        let output = Command::new("sh").arg("-c").arg(&version_cmd).output();
+
+        match output {
+            Ok(out) if out.status.success() => {
+                let raw_version = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                Some(parse_version_string(&raw_version))
+            }
+            Ok(_) => {
+                return Err(format!("版本号获取错误：无法执行命令 {}", version_cmd));
+            }
+            Err(e) => {
+                return Err(format!("版本号获取错误：执行失败 - {}", e));
+            }
+        }
+    } else {
+        // 没有路径，使用数据库中的版本
+        instance.version.clone()
+    };
+
+    // 3. 检查远程最新版本
+    let tool_id = &instance.base_id;
+    let update_result = check_update(tool_id.clone()).await?;
+
+    // 4. 如果当前版本有变化，更新数据库
+    if current_version != instance.version {
+        let mut updated_instance = instance.clone();
+        updated_instance.version = current_version.clone();
+        updated_instance.updated_at = chrono::Utc::now().timestamp();
+
+        if let Err(e) = db.update_instance(&updated_instance) {
+            tracing::warn!("更新实例 {} 版本失败: {}", instance_id, e);
+        } else {
+            tracing::info!(
+                "实例 {} 版本已同步更新: {:?} -> {:?}",
+                instance_id,
+                instance.version,
+                current_version
+            );
+        }
+    }
+
+    // 5. 返回结果，使用路径检测的版本号
+    Ok(UpdateResult {
+        success: update_result.success,
+        message: update_result.message,
+        has_update: update_result.has_update,
+        current_version,
+        latest_version: update_result.latest_version,
+        mirror_version: update_result.mirror_version,
+        mirror_is_stale: update_result.mirror_is_stale,
+        tool_id: Some(tool_id.clone()),
+    })
+}
+
+/// 刷新数据库中所有工具的版本号（使用配置的路径检测）
+///
+/// 工作流程：
+/// 1. 读取数据库中所有本地工具实例
+/// 2. 对每个有路径的实例，执行 --version 获取最新版本号
+/// 3. 更新数据库中的版本号
+///
+/// 返回：更新后的工具状态列表
+#[tauri::command]
+pub async fn refresh_all_tool_versions(
+    _registry_state: tauri::State<'_, ToolRegistryState>,
+) -> Result<Vec<crate::commands::types::ToolStatus>, String> {
+    use ::duckcoding::models::ToolType;
+    use ::duckcoding::services::tool::ToolInstanceDB;
+    use std::process::Command;
+
+    let db = ToolInstanceDB::new().map_err(|e| format!("初始化数据库失败: {}", e))?;
+    let all_instances = db
+        .get_all_instances()
+        .map_err(|e| format!("读取数据库失败: {}", e))?;
+
+    let mut statuses = Vec::new();
+
+    for instance in all_instances.iter().filter(|i| i.tool_type == ToolType::Local) {
+        // 使用 install_path 检测版本
+        let new_version = if let Some(path) = &instance.install_path {
+            let version_cmd = format!("{} --version", path);
+            tracing::info!(
+                    "工具 {} 版本检查: {:?}",
+                    instance.tool_name,
+                    version_cmd
+                );
+
+            #[cfg(target_os = "windows")]
+            let output = Command::new("cmd").arg("/C").arg(&version_cmd).output();
+
+            #[cfg(not(target_os = "windows"))]
+            let output = Command::new("sh").arg("-c").arg(&version_cmd).output();
+
+            match output {
+                Ok(out) if out.status.success() => {
+                    let raw_version = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                    Some(parse_version_string(&raw_version))
+                }
+                _ => {
+                    // 版本获取失败，保持原版本
+                    tracing::warn!("工具 {} 版本检测失败1，保持原版本", instance.tool_name);
+                    instance.version.clone()
+                }
+            }
+        } else {
+            tracing::warn!("工具 {} 版本检测失败2，保持原版本", instance.tool_name);
+            instance.version.clone()
+        };
+
+        tracing::info!(
+                    "工具 {} 新版本号: {:?}",
+                    instance.tool_name,
+                    new_version
+                );
+
+        // 如果版本号有变化，更新数据库
+        if new_version != instance.version {
+            let mut updated_instance = instance.clone();
+            updated_instance.version = new_version.clone();
+            updated_instance.updated_at = chrono::Utc::now().timestamp();
+
+            if let Err(e) = db.update_instance(&updated_instance) {
+                tracing::warn!("更新实例 {} 失败: {}", instance.instance_id, e);
+            } else {
+                tracing::info!(
+                    "工具 {} 版本已更新: {:?} -> {:?}",
+                    instance.tool_name,
+                    instance.version,
+                    new_version
+                );
+            }
+        }
+
+        // 添加到返回列表
+        statuses.push(crate::commands::types::ToolStatus {
+            id: instance.base_id.clone(),
+            name: instance.tool_name.clone(),
+            installed: instance.installed,
+            version: new_version,
+        });
+    }
+
+    Ok(statuses)
+}
+
 /// 批量检查所有工具更新
 #[tauri::command]
 pub async fn check_all_updates() -> Result<Vec<UpdateResult>, String> {
@@ -363,8 +574,9 @@ pub async fn validate_tool_path(_tool_id: String, path: String) -> Result<String
 ///
 /// 工作流程：
 /// 1. 验证路径有效性
-/// 2. 创建 ToolInstance
-/// 3. 保存到数据库
+/// 2. 检查路径是否已被其他工具使用（防止重复）
+/// 3. 创建 ToolInstance
+/// 4. 保存到数据库
 ///
 /// 返回：工具状态信息
 #[tauri::command]
@@ -379,7 +591,24 @@ pub async fn add_manual_tool_instance(
     // 1. 验证路径
     let version = validate_tool_path(tool_id.clone(), path.clone()).await?;
 
-    // 2. 创建工具显示名称
+    // 2. 检查路径是否已存在
+    let db = ToolInstanceDB::new().map_err(|e| format!("初始化数据库失败: {}", e))?;
+    let all_instances = db
+        .get_all_instances()
+        .map_err(|e| format!("读取数据库失败: {}", e))?;
+
+    // 路径冲突检查
+    if let Some(existing) = all_instances
+        .iter()
+        .find(|inst| inst.install_path.as_ref() == Some(&path) && inst.tool_type == ToolType::Local)
+    {
+        return Err(format!(
+            "路径冲突：该路径已被 {} 使用，无法重复添加",
+            existing.tool_name
+        ));
+    }
+
+    // 3. 创建工具显示名称
     let tool_name = match tool_id.as_str() {
         "claude-code" => "Claude Code",
         "codex" => "CodeX",
@@ -387,32 +616,30 @@ pub async fn add_manual_tool_instance(
         _ => &tool_id,
     };
 
-    // 3. 创建 ToolInstance
-    let instance_id = format!("{}-local-manual", tool_id);
+    // 4. 创建 ToolInstance（使用时间戳确保唯一性）
     let now = chrono::Utc::now().timestamp();
+    let instance_id = format!("{}-local-{}", tool_id, now);
     let instance = ToolInstance {
         instance_id: instance_id.clone(),
         base_id: tool_id.clone(),
         tool_name: tool_name.to_string(),
         tool_type: ToolType::Local,
-        install_method: Some(InstallMethod::Npm), // 手动添加默认为 Npm，可后续优化
+        install_method: Some(InstallMethod::Npm),
         installed: true,
-        version: Some(version.clone()),
+        version: Some(parse_version_string(&version.clone())),
         install_path: Some(path.clone()),
         wsl_distro: None,
         ssh_config: None,
-        is_builtin: false, // 手动添加的工具不是内置的
+        is_builtin: false,
         created_at: now,
         updated_at: now,
     };
 
-    // 4. 保存到数据库
-    let db = ToolInstanceDB::new().map_err(|e| format!("初始化数据库失败: {}", e))?;
-
+    // 5. 保存到数据库
     db.add_instance(&instance)
         .map_err(|e| format!("保存到数据库失败: {}", e))?;
 
-    // 5. 返回 ToolStatus 格式
+    // 6. 返回 ToolStatus 格式
     Ok(crate::commands::types::ToolStatus {
         id: tool_id.clone(),
         name: tool_name.to_string(),
@@ -455,7 +682,7 @@ pub async fn detect_tool_without_save(
         if result.success {
             let version_str = result.stdout.trim().to_string();
             if !version_str.is_empty() {
-                Some(version_str)
+                Some(parse_version_string(&version_str))
             } else {
                 None
             }

@@ -449,6 +449,8 @@ fn main() {
         check_node_environment,
         install_tool,
         check_update,
+        check_update_for_instance,
+        refresh_all_tool_versions,
         check_all_updates,
         update_tool,
         validate_tool_path,
@@ -525,8 +527,6 @@ fn main() {
         add_wsl_tool_instance,
         add_ssh_tool_instance,
         delete_tool_instance,
-        has_tools_in_database,
-        detect_and_save_tools,
         // 引导管理命令
         get_onboarding_status,
         save_onboarding_progress,

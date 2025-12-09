@@ -36,6 +36,7 @@ export function useDashboard(initialTools: ToolStatus[]) {
         if (updateInfo && updateInfo.success && tool.installed) {
           return {
             ...tool,
+            version: updateInfo.current_version || tool.version, // 使用返回的 current_version
             hasUpdate: updateInfo.has_update,
             latestVersion: updateInfo.latest_version || null,
             mirrorVersion: updateInfo.mirror_version || null,
@@ -90,6 +91,7 @@ export function useDashboard(initialTools: ToolStatus[]) {
             if (tool.id === toolId && tool.installed) {
               return {
                 ...tool,
+                version: updateInfo.current_version || tool.version, // 使用返回的 current_version
                 hasUpdate: updateInfo.has_update,
                 latestVersion: updateInfo.latest_version || null,
                 mirrorVersion: updateInfo.mirror_version || null,

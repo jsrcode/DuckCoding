@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   getToolInstances,
   refreshToolInstances,
+  refreshAllToolVersions,
   addWslToolInstance,
   addSshToolInstance,
   deleteToolInstance,
-  checkUpdate,
+  checkUpdateForInstance,
   updateTool,
 } from '@/lib/tauri-commands';
 import type { ToolInstance, SSHConfig } from '@/types/tool-management';
@@ -63,10 +64,13 @@ export function useToolManagement() {
     }
   }, [initialized, loadTools]);
 
-  // 刷新工具（重新检测并更新数据库）
+  // 刷新工具（刷新版本号并重新读取实例）
   const refreshTools = useCallback(async () => {
     try {
       setLoading(true);
+      // 先刷新所有工具版本号
+      await refreshAllToolVersions();
+      // 再重新读取实例列表
       const tools = await refreshToolInstances();
       setGroupedTools(tools);
       toast({ title: '刷新成功' });
@@ -142,17 +146,11 @@ export function useToolManagement() {
   // 检查更新（仅检测，不执行更新）
   const handleCheckUpdate = useCallback(
     async (instanceId: string) => {
-      // 从 instance 中解析 baseId
-      // 格式: claude-code-local, codex-wsl-ubuntu, gemini-cli-ssh-dev
-      const parts = instanceId.split('-');
-      // 找到类型标识符的位置 (local, wsl, ssh)
-      const typeIndex = parts.findIndex((p) => ['local', 'wsl', 'ssh'].includes(p));
-      const baseId = typeIndex > 0 ? parts.slice(0, typeIndex).join('-') : parts[0];
-
       try {
         setCheckingUpdate(instanceId);
 
-        const result = await checkUpdate(baseId);
+        // 使用基于实例的更新检测（会使用配置的路径并更新数据库）
+        const result = await checkUpdateForInstance(instanceId);
 
         // 更新状态信息
         setUpdateInfoMap((prev) => ({
@@ -164,17 +162,35 @@ export function useToolManagement() {
           },
         }));
 
+        // 从 instanceId 解析工具名称用于显示
+        const parts = instanceId.split('-');
+        const typeIndex = parts.findIndex((p) => ['local', 'wsl', 'ssh'].includes(p));
+        const toolName = typeIndex > 0 ? parts.slice(0, typeIndex).join('-') : parts[0];
+
         if (result.has_update) {
           toast({
             title: '发现新版本',
-            description: `${baseId}: ${result.current_version || '未知'} → ${result.latest_version || '未知'}`,
+            description: `${toolName}: ${result.current_version || '未知'} → ${result.latest_version || '未知'}`,
           });
         } else {
           toast({
             title: '已是最新版本',
-            description: `${baseId} 当前版本: ${result.current_version || '未知'}`,
+            description: `${toolName} 当前版本: ${result.current_version || '未知'}`,
           });
         }
+
+        // 同步更新 groupedTools 中的版本号（避免重新加载导致 Tab 跳转）
+        setGroupedTools((prev) => {
+          const updated = { ...prev };
+          for (const [toolId, instances] of Object.entries(updated)) {
+            updated[toolId] = instances.map((inst) =>
+              inst.instance_id === instanceId
+                ? { ...inst, version: result.current_version }
+                : inst,
+            );
+          }
+          return updated;
+        });
       } catch (err) {
         toast({
           title: '检测失败',
