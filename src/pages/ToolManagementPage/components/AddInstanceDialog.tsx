@@ -22,10 +22,12 @@ import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import type { SSHConfig } from '@/types/tool-management';
 import {
   listWslDistributions,
-  detectSingleTool,
-  detectToolWithoutSave,
   validateToolPath,
   addManualToolInstance,
+  scanInstallerForToolPath,
+  scanAllToolCandidates,
+  type InstallerCandidate,
+  type ToolCandidate,
 } from '@/lib/tauri-commands';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -74,6 +76,10 @@ export function AddInstanceDialog({ open, onClose, onAdd }: AddInstanceDialogPro
   const [manualPath, setManualPath] = useState('');
   const [installMethod, setInstallMethod] = useState<'npm' | 'brew' | 'official' | 'other'>('npm');
   const [installerPath, setInstallerPath] = useState('');
+  const [installerCandidates, setInstallerCandidates] = useState<InstallerCandidate[]>([]);
+  const [toolCandidates, setToolCandidates] = useState<ToolCandidate[]>([]);
+  const [selectedToolCandidate, setSelectedToolCandidate] = useState<ToolCandidate | null>(null);
+  const [showCustomInstaller, setShowCustomInstaller] = useState(false);
   const [validating, setValidating] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -120,6 +126,9 @@ export function AddInstanceDialog({ open, onClose, onAdd }: AddInstanceDialogPro
   // 重置扫描结果：当用户更改工具、环境类型或添加方式时
   useEffect(() => {
     setScanResult(null);
+    setToolCandidates([]);
+    setSelectedToolCandidate(null);
+    setInstallerCandidates([]);
   }, [baseId, envType, localMethod]);
 
   const getCommonPaths = () => {
@@ -224,13 +233,13 @@ export function AddInstanceDialog({ open, onClose, onAdd }: AddInstanceDialogPro
 
     try {
       if (localMethod === 'auto') {
-        // 自动扫描（不保存到数据库）
-        console.log('[AddInstance] 调用 detectToolWithoutSave，工具:', baseId);
-        const result = await detectToolWithoutSave(baseId);
-        console.log('[AddInstance] 扫描结果:', result);
-        setScanResult({ installed: result.installed, version: result.version || '未知' });
+        // 自动扫描（扫描所有可能的工具实例）
+        console.log('[AddInstance] 调用 scanAllToolCandidates，工具:', baseId);
+        const candidates = await scanAllToolCandidates(baseId);
+        console.log('[AddInstance] 扫描到', candidates.length, '个工具候选');
+        setToolCandidates(candidates);
 
-        if (!result.installed) {
+        if (candidates.length === 0) {
           toast({
             variant: 'destructive',
             title: '未检测到工具',
@@ -238,12 +247,18 @@ export function AddInstanceDialog({ open, onClose, onAdd }: AddInstanceDialogPro
           });
         } else {
           toast({
-            title: '检测成功',
-            description: `${toolNames[baseId]} v${result.version}`,
+            title: '扫描完成',
+            description: `找到 ${candidates.length} 个 ${toolNames[baseId]} 实例`,
           });
+
+          // 如果只有一个候选，自动选择
+          if (candidates.length === 1) {
+            setSelectedToolCandidate(candidates[0]);
+            setScanResult({ installed: true, version: candidates[0].version });
+          }
         }
       } else {
-        // 手动验证路径（不保存）
+        // 手动验证路径（不保存）并扫描安装器
         if (!manualPath) {
           toast({
             variant: 'destructive',
@@ -264,6 +279,29 @@ export function AddInstanceDialog({ open, onClose, onAdd }: AddInstanceDialogPro
         const version = await validateToolPath(baseId, manualPath);
         console.log('[AddInstance] 验证结果:', version);
         setScanResult({ installed: true, version });
+
+        // 扫描安装器路径
+        console.log('[AddInstance] 扫描安装器路径');
+        try {
+          const installerResults = await scanInstallerForToolPath(manualPath);
+          console.log('[AddInstance] 扫描到', installerResults.length, '个安装器候选');
+          setInstallerCandidates(installerResults);
+
+          // 自动选择第一个候选
+          if (installerResults.length > 0) {
+            setInstallerPath(installerResults[0].path);
+            // 根据安装器类型设置 installMethod
+            const installerType = installerResults[0].installer_type.toLowerCase();
+            if (installerType.includes('npm')) {
+              setInstallMethod('npm');
+            } else if (installerType.includes('brew')) {
+              setInstallMethod('brew');
+            }
+          }
+        } catch (error) {
+          console.error('[AddInstance] 扫描安装器失败:', error);
+          setInstallerCandidates([]);
+        }
 
         toast({
           title: '验证成功',
@@ -298,20 +336,36 @@ export function AddInstanceDialog({ open, onClose, onAdd }: AddInstanceDialogPro
       setLoading(true);
       try {
         if (localMethod === 'auto') {
-          // 自动扫描：调用保存命令
-          console.log('[AddInstance] 保存自动扫描结果，工具:', baseId);
-          const result = await detectSingleTool(baseId, true);
-          if (!result.installed) {
+          // 自动扫描：使用选中的候选
+          if (!selectedToolCandidate) {
             toast({
               variant: 'destructive',
-              title: '保存失败',
-              description: '工具状态已变化，请重新扫描',
+              title: '请选择工具实例',
+              description: '请从扫描结果中选择一个实例',
             });
             return;
           }
+
+          console.log(
+            '[AddInstance] 保存自动扫描结果，工具:',
+            baseId,
+            '候选:',
+            selectedToolCandidate,
+          );
+
+          // 确定安装方法字符串
+          const methodStr = selectedToolCandidate.install_method.toLowerCase();
+
+          await addManualToolInstance(
+            baseId,
+            selectedToolCandidate.tool_path,
+            methodStr,
+            selectedToolCandidate.installer_path || undefined,
+          );
+
           toast({
             title: '添加成功',
-            description: `${toolNames[baseId]} v${result.version}`,
+            description: `${toolNames[baseId]} v${selectedToolCandidate.version}`,
           });
         } else {
           // 手动指定：验证并保存路径
@@ -381,6 +435,9 @@ export function AddInstanceDialog({ open, onClose, onAdd }: AddInstanceDialogPro
       setManualPath('');
       setInstallMethod('npm');
       setInstallerPath('');
+      setInstallerCandidates([]);
+      setToolCandidates([]);
+      setSelectedToolCandidate(null);
       setValidationError(null);
       setSelectedDistro('');
       setScanResult(null);
@@ -402,6 +459,9 @@ export function AddInstanceDialog({ open, onClose, onAdd }: AddInstanceDialogPro
   const handleBack = () => {
     setStep(1);
     setScanResult(null);
+    setToolCandidates([]);
+    setSelectedToolCandidate(null);
+    setInstallerCandidates([]);
   };
 
   return (
@@ -562,17 +622,59 @@ export function AddInstanceDialog({ open, onClose, onAdd }: AddInstanceDialogPro
                       )}
                     </Button>
 
-                    {scanResult && (
-                      <Alert variant={scanResult.installed ? 'default' : 'destructive'}>
+                    {/* 显示候选列表（多个结果时） */}
+                    {toolCandidates.length > 1 && (
+                      <div className="space-y-2">
+                        <Label>选择工具实例（共 {toolCandidates.length} 个）</Label>
+                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                          {toolCandidates.map((candidate, index) => (
+                            <button
+                              key={index}
+                              type="button"
+                              onClick={() => {
+                                setSelectedToolCandidate(candidate);
+                                setScanResult({ installed: true, version: candidate.version });
+                              }}
+                              className={cn(
+                                'w-full p-3 rounded-lg border-2 text-left transition-all hover:border-primary/50',
+                                selectedToolCandidate === candidate
+                                  ? 'border-primary bg-primary/5'
+                                  : 'border-border',
+                              )}
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="space-y-1 flex-1">
+                                  <div className="text-sm font-medium">{candidate.tool_path}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    版本：{candidate.version}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    安装器：{candidate.installer_path || '未检测到'}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    方法：{candidate.install_method}
+                                  </div>
+                                </div>
+                                {selectedToolCandidate === candidate && (
+                                  <CheckCircle2 className="h-5 w-5 text-primary flex-shrink-0" />
+                                )}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 单个候选时直接显示 */}
+                    {toolCandidates.length === 1 && selectedToolCandidate && (
+                      <Alert>
                         <InfoIcon className="h-4 w-4" />
                         <AlertDescription>
-                          {scanResult.installed ? (
-                            <>
-                              ✓ 检测成功：{toolNames[baseId]} v{scanResult.version}
-                            </>
-                          ) : (
-                            <>未检测到工具，请尝试手动指定路径</>
-                          )}
+                          <div className="space-y-1">
+                            <div>✓ 路径：{selectedToolCandidate.tool_path}</div>
+                            <div>版本：{selectedToolCandidate.version}</div>
+                            <div>安装器：{selectedToolCandidate.installer_path || '未检测到'}</div>
+                          </div>
                         </AlertDescription>
                       </Alert>
                     )}
@@ -669,24 +771,49 @@ export function AddInstanceDialog({ open, onClose, onAdd }: AddInstanceDialogPro
                   {installMethod !== 'other' && (
                     <div className="space-y-2">
                       <Label>安装器路径（用于更新工具）</Label>
-                      <div className="flex gap-2">
-                        <Input
-                          value={installerPath}
-                          onChange={(e) => setInstallerPath(e.target.value)}
-                          placeholder={`如: ${navigator.platform.toLowerCase().includes('win') ? 'C:\\Program Files\\nodejs\\npm.cmd' : '/usr/local/bin/npm'}`}
-                          disabled={loading || scanning}
-                        />
-                        <Button
-                          onClick={handleBrowseInstaller}
-                          variant="outline"
-                          disabled={loading || scanning}
-                        >
-                          浏览...
-                        </Button>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        安装器路径用于 APP 内快捷更新，留空则无法使用快捷更新功能
-                      </p>
+
+                      {/* 如果扫描到候选，显示选择列表 */}
+                      {installerCandidates.length > 0 ? (
+                        <>
+                          <Select value={installerPath} onValueChange={setInstallerPath}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="选择安装器" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {installerCandidates.map((candidate, index) => (
+                                <SelectItem key={index} value={candidate.path}>
+                                  {candidate.path} ({candidate.installer_type})
+                                  {candidate.level === 1 ? ' [同级]' : ' [上级]'}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            已自动扫描到 {installerCandidates.length} 个安装器，可切换或手动输入
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex gap-2">
+                            <Input
+                              value={installerPath}
+                              onChange={(e) => setInstallerPath(e.target.value)}
+                              placeholder={`如: ${navigator.platform.toLowerCase().includes('win') ? 'C:\\Program Files\\nodejs\\npm.cmd' : '/usr/local/bin/npm'}`}
+                              disabled={loading || scanning}
+                            />
+                            <Button
+                              onClick={handleBrowseInstaller}
+                              variant="outline"
+                              disabled={loading || scanning}
+                            >
+                              浏览...
+                            </Button>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            未检测到安装器，请手动选择或留空（无法快捷更新）
+                          </p>
+                        </>
+                      )}
                     </div>
                   )}
 
@@ -806,7 +933,10 @@ export function AddInstanceDialog({ open, onClose, onAdd }: AddInstanceDialogPro
                   loading ||
                   scanning ||
                   envType === 'ssh' ||
-                  (envType === 'local' && (!scanResult || !scanResult.installed))
+                  (envType === 'local' && localMethod === 'auto' && !selectedToolCandidate) ||
+                  (envType === 'local' &&
+                    localMethod === 'manual' &&
+                    (!scanResult || !scanResult.installed))
                 }
               >
                 {loading ? (

@@ -455,6 +455,8 @@ fn main() {
         update_tool,
         validate_tool_path,
         add_manual_tool_instance,
+        scan_installer_for_tool_path,
+        scan_all_tool_candidates,
         detect_single_tool,
         detect_tool_without_save,
         // 请使用新的 pm_ 系列命令

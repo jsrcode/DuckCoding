@@ -45,6 +45,81 @@ pub async fn refresh_tool_status(
         .map_err(|e| format!("获取工具状态失败: {}", e))
 }
 
+/// 扫描工具路径的安装器
+///
+/// 工作流程：
+/// 1. 从工具路径提取目录
+/// 2. 在同级目录扫描安装器（npm、brew 等）
+/// 3. 在上级目录扫描安装器
+/// 4. 返回候选列表（按优先级排序）
+///
+/// 返回：安装器候选列表
+#[tauri::command]
+pub async fn scan_installer_for_tool_path(
+    tool_path: String,
+) -> Result<Vec<::duckcoding::utils::InstallerCandidate>, String> {
+    use ::duckcoding::utils::scan_installer_paths;
+
+    Ok(scan_installer_paths(&tool_path))
+}
+
+/// 扫描所有工具候选（用于自动扫描）
+///
+/// 工作流程：
+/// 1. 使用硬编码路径列表查找所有工具实例
+/// 2. 对每个找到的工具：获取版本、检测安装方法、扫描安装器
+/// 3. 返回候选列表供用户选择
+///
+/// 返回：工具候选列表
+#[tauri::command]
+pub async fn scan_all_tool_candidates(
+    tool_id: String,
+) -> Result<Vec<::duckcoding::utils::ToolCandidate>, String> {
+    use ::duckcoding::utils::{scan_installer_paths, scan_tool_executables, ToolCandidate};
+    use std::process::Command;
+
+    // 1. 扫描所有工具路径
+    let tool_paths = scan_tool_executables(&tool_id);
+    let mut candidates = Vec::new();
+
+    // 2. 对每个工具路径：获取版本和安装器
+    for tool_path in tool_paths {
+        // 获取版本
+        let version_cmd = format!("{} --version", tool_path);
+
+        #[cfg(target_os = "windows")]
+        let output = Command::new("cmd").arg("/C").arg(&version_cmd).output();
+
+        #[cfg(not(target_os = "windows"))]
+        let output = Command::new("sh").arg("-c").arg(&version_cmd).output();
+
+        let version = match output {
+            Ok(out) if out.status.success() => {
+                let raw = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                parse_version_string(&raw)
+            }
+            _ => continue, // 版本获取失败，跳过此候选
+        };
+
+        // 扫描安装器
+        let installer_candidates = scan_installer_paths(&tool_path);
+        let installer_path = installer_candidates.first().map(|c| c.path.clone());
+        let install_method = installer_candidates
+            .first()
+            .map(|c| c.installer_type.clone())
+            .unwrap_or(InstallMethod::Official);
+
+        candidates.push(ToolCandidate {
+            tool_path: tool_path.clone(),
+            installer_path,
+            install_method,
+            version,
+        });
+    }
+
+    Ok(candidates)
+}
+
 /// 检测 Node.js 和 npm 环境
 #[tauri::command]
 pub async fn check_node_environment() -> Result<NodeEnvironment, String> {

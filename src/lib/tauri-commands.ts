@@ -881,6 +881,43 @@ export async function validateToolPath(toolId: string, path: string): Promise<st
 }
 
 /**
+ * 工具候选结果
+ */
+export interface ToolCandidate {
+  tool_path: string;
+  installer_path: string | null;
+  install_method: string; // "Npm" | "Brew" | "Official" | "Other"
+  version: string;
+}
+
+/**
+ * 安装器候选结果
+ */
+export interface InstallerCandidate {
+  path: string;
+  installer_type: string; // "Npm" | "Brew" | "Official" | "Other"
+  level: number; // 1=同级目录, 2=上级目录
+}
+
+/**
+ * 扫描所有工具候选（用于自动扫描）
+ * @param toolId 工具ID
+ * @returns 工具候选列表
+ */
+export async function scanAllToolCandidates(toolId: string): Promise<ToolCandidate[]> {
+  return invoke<ToolCandidate[]>('scan_all_tool_candidates', { toolId });
+}
+
+/**
+ * 扫描工具路径的安装器
+ * @param toolPath 工具可执行文件路径
+ * @returns 安装器候选列表
+ */
+export async function scanInstallerForToolPath(toolPath: string): Promise<InstallerCandidate[]> {
+  return invoke<InstallerCandidate[]>('scan_installer_for_tool_path', { toolPath });
+}
+
+/**
  * 手动添加工具实例（保存用户指定的路径）
  * @param toolId 工具ID
  * @param path 工具可执行文件路径
