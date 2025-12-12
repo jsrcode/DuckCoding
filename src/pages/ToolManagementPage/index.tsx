@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ToolListSection } from './components/ToolListSection';
-import { AddInstanceDialog } from './components/AddInstanceDialog';
+import { AddInstanceDialog } from './components/AddInstanceDialog/AddInstanceDialog';
 import { VersionManagementDialog } from './components/VersionManagementDialog';
 import { useToolManagement } from './hooks/useToolManagement';
 import type { ToolStatus } from '@/lib/tauri-commands';
