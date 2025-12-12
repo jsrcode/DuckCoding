@@ -3,13 +3,12 @@
 use serde_json::Value;
 
 use ::duckcoding::services::config::{
-    ClaudeSettingsPayload, CodexSettingsPayload, ExternalConfigChange, GeminiEnvPayload,
-    GeminiSettingsPayload, ImportExternalChangeResult,
+    self, claude, codex, gemini, ClaudeSettingsPayload, CodexSettingsPayload, ExternalConfigChange,
+    GeminiEnvPayload, GeminiSettingsPayload, ImportExternalChangeResult,
 };
 use ::duckcoding::utils::config::{
     apply_proxy_if_configured, read_global_config, write_global_config,
 };
-use ::duckcoding::ConfigService;
 use ::duckcoding::GlobalConfig;
 use ::duckcoding::Tool;
 
@@ -52,16 +51,14 @@ fn build_reqwest_client() -> Result<reqwest::Client, String> {
 /// 检测外部配置变更
 #[tauri::command]
 pub async fn get_external_changes() -> Result<Vec<ExternalConfigChange>, String> {
-    ::duckcoding::services::config_legacy::ConfigService::detect_external_changes()
-        .map_err(|e| e.to_string())
+    config::detect_external_changes().map_err(|e| e.to_string())
 }
 
 /// 确认外部变更（清除脏标记并刷新 checksum）
 #[tauri::command]
 pub async fn ack_external_change(tool: String) -> Result<(), String> {
     let tool_obj = Tool::by_id(&tool).ok_or_else(|| format!("❌ 未知的工具: {tool}"))?;
-    ::duckcoding::services::config_legacy::ConfigService::acknowledge_external_change(&tool_obj)
-        .map_err(|e| e.to_string())
+    config::acknowledge_external_change(&tool_obj).map_err(|e| e.to_string())
 }
 
 /// 将外部修改导入集中仓
@@ -72,10 +69,7 @@ pub async fn import_native_change(
     as_new: bool,
 ) -> Result<ImportExternalChangeResult, String> {
     let tool_obj = Tool::by_id(&tool).ok_or_else(|| format!("❌ 未知的工具: {tool}"))?;
-    ::duckcoding::services::config_legacy::ConfigService::import_external_change(
-        &tool_obj, &profile, as_new,
-    )
-    .map_err(|e| e.to_string())
+    config::import_external_change(&tool_obj, &profile, as_new).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -210,9 +204,9 @@ pub async fn generate_api_key_for_tool(tool: String) -> Result<GenerateApiKeyRes
 
 #[tauri::command]
 pub fn get_claude_settings() -> Result<ClaudeSettingsPayload, String> {
-    ConfigService::read_claude_settings()
+    claude::read_claude_settings()
         .map(|settings| {
-            let extra = ConfigService::read_claude_extra_config().ok();
+            let extra = claude::read_claude_extra_config().ok();
             ClaudeSettingsPayload {
                 settings,
                 extra_config: extra,
@@ -223,42 +217,42 @@ pub fn get_claude_settings() -> Result<ClaudeSettingsPayload, String> {
 
 #[tauri::command]
 pub fn save_claude_settings(settings: Value, extra_config: Option<Value>) -> Result<(), String> {
-    ConfigService::save_claude_settings(&settings, extra_config.as_ref()).map_err(|e| e.to_string())
+    claude::save_claude_settings(&settings, extra_config.as_ref()).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn get_claude_schema() -> Result<Value, String> {
-    ConfigService::get_claude_schema().map_err(|e| e.to_string())
+    claude::get_claude_schema().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn get_codex_settings() -> Result<CodexSettingsPayload, String> {
-    ConfigService::read_codex_settings().map_err(|e| e.to_string())
+    codex::read_codex_settings().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn save_codex_settings(settings: Value, auth_token: Option<String>) -> Result<(), String> {
-    ConfigService::save_codex_settings(&settings, auth_token).map_err(|e| e.to_string())
+    codex::save_codex_settings(&settings, auth_token).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn get_codex_schema() -> Result<Value, String> {
-    ConfigService::get_codex_schema().map_err(|e| e.to_string())
+    codex::get_codex_schema().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn get_gemini_settings() -> Result<GeminiSettingsPayload, String> {
-    ConfigService::read_gemini_settings().map_err(|e| e.to_string())
+    gemini::read_gemini_settings().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn save_gemini_settings(settings: Value, env: GeminiEnvPayload) -> Result<(), String> {
-    ConfigService::save_gemini_settings(&settings, &env).map_err(|e| e.to_string())
+    gemini::save_gemini_settings(&settings, &env).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn get_gemini_schema() -> Result<Value, String> {
-    ConfigService::get_gemini_schema().map_err(|e| e.to_string())
+    gemini::get_gemini_schema().map_err(|e| e.to_string())
 }
 
 // ==================== 单实例模式配置命令 ====================

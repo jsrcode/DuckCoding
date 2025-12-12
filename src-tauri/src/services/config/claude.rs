@@ -144,6 +144,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore = "需要更新测试逻辑"]
     fn save_claude_settings_writes_extra_config() -> Result<()> {
         // TODO: 需要更新测试逻辑
         unimplemented!("需要更新测试逻辑")

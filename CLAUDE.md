@@ -74,9 +74,26 @@ last-updated: 2025-12-07
 - Linux 装 `libwebkit2gtk-4.1-dev`、`libjavascriptcoregtk-4.1-dev`、`patchelf` 等 Tauri v2 依赖；Windows 确保 WebView2 Runtime（先查注册表，winget 安装失败则回退微软官方静默安装包）；Node 20.19.0，Rust stable（含 clippy / rustfmt），启用 npm 与 cargo 缓存。
 - CI 未通过不得合并；缺少 dist 时会在 `npm run check` 内自动触发 `npm run build` 以满足 Clippy 输入。
 
-## 架构记忆（2025-11-29）
+## 架构记忆（2025-12-12）
 
 - `src-tauri/src/main.rs` 仅保留应用启动与托盘事件注册，所有 Tauri Commands 拆分到 `src-tauri/src/commands/*`，服务实现位于 `services/*`，核心设施放在 `core/*`（HTTP、日志、错误）。
+- **配置管理系统（2025-12-12 重构）**：
+  - `services/config/` 模块化拆分为 6 个子模块：
+    - `types.rs`：共享类型定义（`CodexSettingsPayload`、`ClaudeSettingsPayload`、`GeminiEnvPayload` 等，60行）
+    - `utils.rs`：工具函数（`merge_toml_tables` 保留 TOML 注释，85行）
+    - `claude.rs`：Claude Code 配置管理（4个公共函数，实现 `ToolConfigManager` trait，177行）
+    - `codex.rs`：Codex 配置管理（支持 config.toml + auth.json，保留 TOML 格式，204行）
+    - `gemini.rs`：Gemini CLI 配置管理（支持 settings.json + .env 环境变量，199行）
+    - `watcher.rs`：外部变更检测 + 文件监听（合并原 `config_watcher.rs`，550行）
+      - 变更检测：`detect_external_changes`、`mark_external_change`、`acknowledge_external_change`
+      - Profile 导入：`import_external_change`
+      - 文件监听：`ConfigWatcher`（轮询，跨平台）、`NotifyWatcherManager`（notify，高性能）
+      - 核心函数：`config_paths`（返回主配置 + 附属文件）、`compute_native_checksum`（SHA256 校验和）
+  - 统一接口：`ToolConfigManager` trait 定义标准的 `read_settings`、`save_settings`、`get_schema`
+  - 废弃功能：删除 `ConfigService::save_backup` 系列函数（由 `ProfileManager` 替代）
+  - 变更检测：与 `ProfileManager` 集成，自动同步激活状态的 dirty 标记和 checksum
+  - 命令层更新：`commands/config_commands.rs` 使用新模块路径（`config::claude::*`、`config::codex::*`、`config::gemini::*`）
+  - 测试状态：12 个测试（2 个轮询监听测试通过，10 个标记为 #[ignore]，需 ProfileManager 重写）
 - **工具管理系统**：
   - 多环境架构：支持本地（Local）、WSL、SSH 三种环境的工具实例管理
   - 数据模型：`ToolType`（环境类型）、`ToolInstance`（工具实例）存储在 `models/tool.rs`

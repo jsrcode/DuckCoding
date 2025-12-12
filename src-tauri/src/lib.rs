@@ -11,7 +11,6 @@ pub mod utils;
 pub use models::*;
 // Explicitly re-export only selected service types to avoid ambiguous glob re-exports
 pub use models::InstallMethod; // InstallMethod is defined in models (tool.rs) — re-export from models
-pub use services::config_legacy::ConfigService; // 旧配置服务，待删除
 pub use services::downloader::FileDownloader;
 pub use services::installer::InstallerService;
 pub use services::proxy::ProxyService;
