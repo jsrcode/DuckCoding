@@ -6,9 +6,8 @@ use ::duckcoding::services::config::{
     self, claude, codex, gemini, ClaudeSettingsPayload, CodexSettingsPayload, ExternalConfigChange,
     GeminiEnvPayload, GeminiSettingsPayload, ImportExternalChangeResult,
 };
-use ::duckcoding::utils::config::{
-    apply_proxy_if_configured, read_global_config, write_global_config,
-};
+use ::duckcoding::services::proxy::config::apply_global_proxy;
+use ::duckcoding::utils::config::{read_global_config, write_global_config};
 use ::duckcoding::GlobalConfig;
 use ::duckcoding::Tool;
 
@@ -85,7 +84,7 @@ pub async fn get_global_config() -> Result<Option<GlobalConfig>, String> {
 #[tauri::command]
 pub async fn generate_api_key_for_tool(tool: String) -> Result<GenerateApiKeyResult, String> {
     // 应用代理配置（如果已配置）
-    apply_proxy_if_configured();
+    apply_global_proxy().ok();
 
     // 读取全局配置
     let global_config = get_global_config()

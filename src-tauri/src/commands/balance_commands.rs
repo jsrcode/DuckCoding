@@ -6,7 +6,7 @@
 use ::duckcoding::http_client::build_client;
 use ::duckcoding::models::{BalanceConfig, BalanceStore};
 use ::duckcoding::services::balance::BalanceManager;
-use ::duckcoding::utils::config::apply_proxy_if_configured;
+use ::duckcoding::services::proxy::config::apply_global_proxy;
 use std::collections::HashMap;
 
 /// Tauri command: 通用 API 请求
@@ -26,7 +26,7 @@ pub async fn fetch_api(
     headers: HashMap<String, String>,
     timeout_ms: Option<u64>,
 ) -> Result<serde_json::Value, String> {
-    apply_proxy_if_configured();
+    apply_global_proxy().ok();
 
     // 验证 HTTP 方法
     let method_normalized = method.to_uppercase();

@@ -2,7 +2,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use duckcoding::services::config::{NotifyWatcherManager, EXTERNAL_CHANGE_EVENT};
-use duckcoding::utils::config::{apply_proxy_if_configured, read_global_config};
+use duckcoding::services::proxy::config::apply_global_proxy;
+use duckcoding::utils::config::read_global_config;
 use serde::Serialize;
 use std::env;
 use std::sync::Mutex;
@@ -154,7 +155,7 @@ fn schedule_update_check(app_handle: AppHandle) {
 /// 执行应用启动钩子（setup）
 fn setup_app_hooks(app: &mut tauri::App) -> tauri::Result<()> {
     // 1. 应用代理配置
-    apply_proxy_if_configured();
+    apply_global_proxy().ok();
 
     // 2. 设置工作目录
     setup_working_directory(app)?;

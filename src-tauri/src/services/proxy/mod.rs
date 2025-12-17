@@ -2,6 +2,7 @@
 //
 // 包含代理配置、透明代理等功能
 
+pub mod config; // 代理配置辅助模块
 pub mod headers;
 pub mod proxy_instance;
 pub mod proxy_manager;
