@@ -1,5 +1,4 @@
 use crate::data::DataManager;
-use crate::services::proxy::ProxyService;
 use crate::GlobalConfig;
 use std::fs;
 use std::path::PathBuf;
@@ -51,7 +50,10 @@ pub fn read_global_config() -> Result<Option<GlobalConfig>, String> {
     Ok(Some(config))
 }
 
-/// 写入全局配置，同时设置权限并更新当前进程代理
+/// 写入全局配置
+///
+/// 注意：此函数仅写入配置文件，不会自动应用代理设置。
+/// 如需应用代理，请在写入后调用 `services::proxy::config::apply_global_proxy()`
 pub fn write_global_config(config: &GlobalConfig) -> Result<(), String> {
     let config_path = global_config_path()?;
 
@@ -65,15 +67,7 @@ pub fn write_global_config(config: &GlobalConfig) -> Result<(), String> {
         .write(&config_path, &config_value)
         .map_err(|e| format!("Failed to write config: {e}"))?;
 
-    ProxyService::apply_proxy_from_config(config);
     Ok(())
-}
-
-/// 如配置存在代理设置，则立即应用到环境变量
-pub fn apply_proxy_if_configured() {
-    if let Ok(Some(config)) = read_global_config() {
-        ProxyService::apply_proxy_from_config(&config);
-    }
 }
 
 #[cfg(test)]

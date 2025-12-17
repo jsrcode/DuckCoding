@@ -445,13 +445,15 @@ export function UpdateTab({ updateInfo: externalUpdateInfo, onUpdateCheck }: Upd
       </Card>
 
       {/* 安装包选择器 */}
-      <InstallPackageSelector
-        isOpen={showPackageSelector}
-        onClose={() => setShowPackageSelector(false)}
-        updateInfo={updateInfo}
-        onDownloadSelected={downloadAndInstallSpecificPackage}
-        platformInfo={platformInfo}
-      />
+      {updateInfo && platformInfo && (
+        <InstallPackageSelector
+          isOpen={showPackageSelector}
+          onClose={() => setShowPackageSelector(false)}
+          updateInfo={updateInfo}
+          onDownloadSelected={downloadAndInstallSpecificPackage}
+          platformInfo={platformInfo}
+        />
+      )}
     </div>
   );
 }

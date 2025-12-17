@@ -1,8 +1,8 @@
 use crate::commands::tool_management::ToolRegistryState;
 use crate::commands::types::{InstallResult, ToolStatus};
 use ::duckcoding::models::{InstallMethod, Tool};
+use ::duckcoding::services::proxy::config::apply_global_proxy;
 use ::duckcoding::services::InstallerService;
-use ::duckcoding::utils::config::apply_proxy_if_configured;
 
 /// 检查所有工具的安装状态（新架构：优先从数据库读取）
 ///
@@ -48,7 +48,7 @@ pub async fn install_tool(
     force: Option<bool>,
 ) -> Result<InstallResult, String> {
     // 应用代理配置（如果已配置）
-    apply_proxy_if_configured();
+    apply_global_proxy().ok();
 
     let force = force.unwrap_or(false);
     #[cfg(debug_assertions)]

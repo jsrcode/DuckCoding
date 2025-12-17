@@ -2,7 +2,8 @@
 //
 // 包含用量统计、用户额度查询等功能
 
-use ::duckcoding::utils::config::{apply_proxy_if_configured, read_global_config};
+use ::duckcoding::services::proxy::config::apply_global_proxy;
+use ::duckcoding::utils::config::read_global_config;
 use serde::Serialize;
 
 /// 用量统计数据结构
@@ -64,7 +65,7 @@ fn build_reqwest_client() -> Result<reqwest::Client, String> {
 
 #[tauri::command]
 pub async fn get_usage_stats() -> Result<UsageStatsResult, String> {
-    apply_proxy_if_configured();
+    apply_global_proxy().ok();
     let global_config =
         read_global_config()?.ok_or_else(|| "请先配置用户ID和系统访问令牌".to_string())?;
     let now = std::time::SystemTime::now()
@@ -139,7 +140,7 @@ pub async fn get_usage_stats() -> Result<UsageStatsResult, String> {
 
 #[tauri::command]
 pub async fn get_user_quota() -> Result<UserQuotaResult, String> {
-    apply_proxy_if_configured();
+    apply_global_proxy().ok();
     let global_config =
         read_global_config()?.ok_or_else(|| "请先配置用户ID和系统访问令牌".to_string())?;
     let client = build_reqwest_client().map_err(|e| format!("创建 HTTP 客户端失败: {e}"))?;

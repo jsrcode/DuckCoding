@@ -6,22 +6,22 @@ use serde::Deserialize;
 
 /// Profile 输入数据（前端传递）
 #[derive(Debug, Deserialize)]
-#[serde(untagged)]
+#[serde(tag = "type", rename_all = "kebab-case")]
 pub enum ProfileInput {
+    #[serde(rename = "claude-code")]
+    Claude { api_key: String, base_url: String },
+    #[serde(rename = "codex")]
+    Codex {
+        api_key: String,
+        base_url: String,
+        wire_api: String,
+    },
+    #[serde(rename = "gemini-cli")]
     Gemini {
         api_key: String,
         base_url: String,
         #[serde(default)]
         model: Option<String>,
-    },
-    Codex {
-        api_key: String,
-        base_url: String,
-        wire_api: String, // 前端和后端都使用 wire_api
-    },
-    Claude {
-        api_key: String,
-        base_url: String,
     },
 }
 

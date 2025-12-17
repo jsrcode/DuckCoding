@@ -31,9 +31,14 @@ export interface GeminiProfilePayload {
 }
 
 /**
- * Profile Payload 联合类型
+ * Profile Payload 联合类型（前端传递给后端）
+ *
+ * 使用 tagged union 确保类型正确匹配
  */
-export type ProfilePayload = ClaudeProfilePayload | CodexProfilePayload | GeminiProfilePayload;
+export type ProfilePayload =
+  | ({ type: 'claude-code' } & ClaudeProfilePayload)
+  | ({ type: 'codex' } & CodexProfilePayload)
+  | ({ type: 'gemini-cli' } & GeminiProfilePayload);
 
 /**
  * Profile 完整数据（包含时间戳）

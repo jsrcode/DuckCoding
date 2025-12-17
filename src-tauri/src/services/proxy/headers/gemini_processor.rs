@@ -18,6 +18,7 @@ use reqwest::header::HeaderMap as ReqwestHeaderMap;
 /// 根据实际需求添加：
 /// - x-goog-user-project header 处理（计费项目）
 /// - OAuth 2.0 令牌支持（如果 Gemini CLI 使用 OAuth）
+#[derive(Debug)]
 pub struct GeminiHeadersProcessor;
 
 #[async_trait]

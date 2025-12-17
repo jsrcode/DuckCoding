@@ -1,14 +1,14 @@
 use crate::commands::tool_management::ToolRegistryState;
 use crate::commands::types::{ToolStatus, UpdateResult};
 use ::duckcoding::models::Tool;
+use ::duckcoding::services::proxy::config::apply_global_proxy;
 use ::duckcoding::services::VersionService;
-use ::duckcoding::utils::config::apply_proxy_if_configured;
 
 /// 检查工具更新（不执行更新）
 #[tauri::command]
 pub async fn check_update(tool: String) -> Result<UpdateResult, String> {
     // 应用代理配置（如果已配置）
-    apply_proxy_if_configured();
+    apply_global_proxy().ok();
 
     #[cfg(debug_assertions)]
     tracing::debug!(tool = %tool, "检查更新（使用VersionService）");
@@ -85,7 +85,7 @@ pub async fn refresh_all_tool_versions(
 #[tauri::command]
 pub async fn check_all_updates() -> Result<Vec<UpdateResult>, String> {
     // 应用代理配置（如果已配置）
-    apply_proxy_if_configured();
+    apply_global_proxy().ok();
 
     #[cfg(debug_assertions)]
     tracing::debug!("批量检查所有工具更新");

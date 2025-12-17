@@ -21,6 +21,7 @@ use reqwest::header::HeaderMap as ReqwestHeaderMap;
 /// 根据实际需求添加：
 /// - OpenAI-Organization header 处理
 /// - OpenAI-Project header 处理
+#[derive(Debug)]
 pub struct CodexHeadersProcessor;
 
 #[async_trait]

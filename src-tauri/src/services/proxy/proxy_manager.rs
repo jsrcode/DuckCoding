@@ -59,7 +59,7 @@ impl ProxyManager {
         }
 
         // 创建 RequestProcessor
-        let processor = create_request_processor(tool_id);
+        let processor = create_request_processor(tool_id).context("创建请求处理器失败")?;
 
         // 创建并启动代理实例
         let instance = ProxyInstance::new(tool_id.to_string(), config, processor);

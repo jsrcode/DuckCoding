@@ -36,7 +36,7 @@ pub struct ProcessedRequest {
 /// - 处理其他 headers（添加/修改/删除）
 /// - 处理请求体（如需要签名等特殊处理）
 #[async_trait]
-pub trait RequestProcessor: Send + Sync {
+pub trait RequestProcessor: Send + Sync + std::fmt::Debug {
     /// 返回工具标识符
     fn tool_id(&self) -> &str;
 
@@ -97,22 +97,20 @@ pub trait RequestProcessor: Send + Sync {
 /// - `tool_id`: 工具标识符 ("claude-code", "codex", "gemini-cli")
 ///
 /// # 返回
-/// - 对应工具的 RequestProcessor 实例
-///
-/// # Panics
-/// 当 `tool_id` 不被支持时会 panic
-pub fn create_request_processor(tool_id: &str) -> Box<dyn RequestProcessor> {
+/// - `Ok(Box<dyn RequestProcessor>)`: 对应工具的 RequestProcessor 实例
+/// - `Err`: 当 tool_id 不被支持时返回错误
+pub fn create_request_processor(tool_id: &str) -> Result<Box<dyn RequestProcessor>> {
     match tool_id {
-        "claude-code" => Box::new(ClaudeHeadersProcessor),
-        "codex" => Box::new(CodexHeadersProcessor),
-        "gemini-cli" => Box::new(GeminiHeadersProcessor),
-        _ => panic!("Unsupported tool: {tool_id}"),
+        "claude-code" => Ok(Box::new(ClaudeHeadersProcessor)),
+        "codex" => Ok(Box::new(CodexHeadersProcessor)),
+        "gemini-cli" => Ok(Box::new(GeminiHeadersProcessor)),
+        _ => Err(anyhow::anyhow!("不支持的工具: {}", tool_id)),
     }
 }
 
 /// 旧工厂函数名称（向后兼容，已弃用）
 #[deprecated(since = "0.1.0", note = "请使用 create_request_processor")]
-pub fn create_headers_processor(tool_id: &str) -> Box<dyn RequestProcessor> {
+pub fn create_headers_processor(tool_id: &str) -> Result<Box<dyn RequestProcessor>> {
     create_request_processor(tool_id)
 }
 
@@ -122,20 +120,23 @@ mod tests {
 
     #[test]
     fn test_create_request_processor() {
-        let claude = create_request_processor("claude-code");
+        let claude =
+            create_request_processor("claude-code").expect("should create claude processor");
         assert_eq!(claude.tool_id(), "claude-code");
 
-        let codex = create_request_processor("codex");
+        let codex = create_request_processor("codex").expect("should create codex processor");
         assert_eq!(codex.tool_id(), "codex");
 
-        let gemini = create_request_processor("gemini-cli");
+        let gemini =
+            create_request_processor("gemini-cli").expect("should create gemini processor");
         assert_eq!(gemini.tool_id(), "gemini-cli");
     }
 
     #[test]
-    #[should_panic(expected = "Unsupported tool")]
     fn test_create_invalid_processor() {
-        create_request_processor("invalid-tool");
+        let result = create_request_processor("invalid-tool");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("不支持的工具"));
     }
 
     #[tokio::test]

@@ -238,12 +238,14 @@ function buildProfilePayload(toolId: ToolId, data: ProfileFormData): ProfilePayl
   switch (toolId) {
     case 'claude-code':
       return {
+        type: 'claude-code',
         api_key: data.api_key,
         base_url: data.base_url,
       };
 
     case 'codex':
       return {
+        type: 'codex',
         api_key: data.api_key,
         base_url: data.base_url,
         wire_api: data.wire_api || 'responses', // 确保有 wire_api
@@ -251,6 +253,7 @@ function buildProfilePayload(toolId: ToolId, data: ProfileFormData): ProfilePayl
 
     case 'gemini-cli':
       return {
+        type: 'gemini-cli',
         api_key: data.api_key,
         base_url: data.base_url,
         model: data.model && data.model !== '' ? data.model : undefined, // 空值不设置 model

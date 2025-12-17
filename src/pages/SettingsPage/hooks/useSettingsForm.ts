@@ -35,10 +35,6 @@ export function useSettingsForm({ initialConfig, onConfigChange }: UseSettingsFo
   ]);
 
   // 实验性功能 - 透明代理
-  const [transparentProxyEnabled, setTransparentProxyEnabled] = useState(false);
-  const [transparentProxyPort, setTransparentProxyPort] = useState(8787);
-  const [transparentProxyApiKey, setTransparentProxyApiKey] = useState('');
-  const [transparentProxyAllowPublic, setTransparentProxyAllowPublic] = useState(false);
 
   // 状态
   const [globalConfig, setGlobalConfig] = useState<GlobalConfig | null>(initialConfig);
@@ -69,10 +65,6 @@ export function useSettingsForm({ initialConfig, onConfigChange }: UseSettingsFo
           '*.lan',
         ],
       );
-      setTransparentProxyEnabled(initialConfig.transparent_proxy_enabled || false);
-      setTransparentProxyPort(initialConfig.transparent_proxy_port || 8787);
-      setTransparentProxyApiKey(initialConfig.transparent_proxy_api_key || '');
-      setTransparentProxyAllowPublic(initialConfig.transparent_proxy_allow_public || false);
     }
   }, [initialConfig]);
 
@@ -90,10 +82,6 @@ export function useSettingsForm({ initialConfig, onConfigChange }: UseSettingsFo
       throw new Error('代理地址和端口不能为空');
     }
 
-    if (transparentProxyEnabled && (!transparentProxyApiKey.trim() || transparentProxyPort <= 0)) {
-      throw new Error('透明代理 API Key 和端口不能为空');
-    }
-
     setSavingSettings(true);
     try {
       const configToSave: GlobalConfig = {
@@ -106,12 +94,6 @@ export function useSettingsForm({ initialConfig, onConfigChange }: UseSettingsFo
         proxy_username: proxyUsername.trim(),
         proxy_password: proxyPassword,
         proxy_bypass_urls: proxyBypassUrls.map((url) => url.trim()).filter((url) => url.length > 0),
-        transparent_proxy_enabled: transparentProxyEnabled,
-        transparent_proxy_port: transparentProxyPort,
-        transparent_proxy_api_key: transparentProxyApiKey.trim(),
-        transparent_proxy_allow_public: transparentProxyAllowPublic,
-        transparent_proxy_real_api_key: globalConfig?.transparent_proxy_real_api_key || '',
-        transparent_proxy_real_base_url: globalConfig?.transparent_proxy_real_base_url || '',
       };
 
       await saveGlobalConfig(configToSave);
@@ -131,22 +113,14 @@ export function useSettingsForm({ initialConfig, onConfigChange }: UseSettingsFo
     proxyUsername,
     proxyPassword,
     proxyBypassUrls,
-    transparentProxyEnabled,
-    transparentProxyPort,
-    transparentProxyApiKey,
-    transparentProxyAllowPublic,
     globalConfig,
     onConfigChange,
   ]);
 
-  // 生成代理 API Key
+  // 生成代理 API Key（已废弃，透明代理功能已移除）
   const generateProxyKey = useCallback(() => {
-    const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = 'dc-proxy-';
-    for (let i = 0; i < 32; i++) {
-      result += charset.charAt(Math.floor(Math.random() * charset.length));
-    }
-    setTransparentProxyApiKey(result);
+    // 功能已移除
+    console.warn('generateProxyKey 功能已废弃');
   }, []);
 
   // 测试代理连接
@@ -253,16 +227,6 @@ export function useSettingsForm({ initialConfig, onConfigChange }: UseSettingsFo
     setProxyTestUrl,
     proxyBypassUrls,
     setProxyBypassUrls,
-
-    // Transparent proxy settings
-    transparentProxyEnabled,
-    setTransparentProxyEnabled,
-    transparentProxyPort,
-    setTransparentProxyPort,
-    transparentProxyApiKey,
-    setTransparentProxyApiKey,
-    transparentProxyAllowPublic,
-    setTransparentProxyAllowPublic,
 
     // State
     globalConfig,

@@ -28,10 +28,16 @@
 
 use crate::data::managers::{EnvManager, JsonManager, SqliteManager, TomlManager};
 use crate::data::Result;
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
+
+/// 全局 DataManager 单例
+///
+/// 使用全局单例共享缓存，避免重复创建提升性能
+static GLOBAL_DATA_MANAGER: Lazy<DataManager> = Lazy::new(DataManager::new);
 
 /// 统一数据管理器
 ///
@@ -52,6 +58,20 @@ pub struct DataManager {
 }
 
 impl DataManager {
+    /// 获取全局 DataManager 单例（推荐）
+    ///
+    /// 使用全局单例可以共享缓存，提升性能
+    ///
+    /// # 示例
+    ///
+    /// ```rust
+    /// let manager = DataManager::global();
+    /// manager.json().read(path)?;
+    /// ```
+    pub fn global() -> &'static DataManager {
+        &GLOBAL_DATA_MANAGER
+    }
+
     /// 创建默认配置的管理器
     ///
     /// 默认配置：

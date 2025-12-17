@@ -70,12 +70,17 @@ fn apply_claude_native(tool: &Tool, profile: &ClaudeProfile) -> Result<()> {
         serde_json::json!({})
     };
 
-    let obj = settings.as_object_mut().unwrap();
+    let obj = settings
+        .as_object_mut()
+        .ok_or_else(|| anyhow!("Claude 配置格式错误：settings 不是对象"))?;
     if !obj.contains_key("env") {
         obj.insert("env".to_string(), Value::Object(Map::new()));
     }
 
-    let env = obj.get_mut("env").unwrap().as_object_mut().unwrap();
+    let env = obj
+        .get_mut("env")
+        .and_then(|v| v.as_object_mut())
+        .ok_or_else(|| anyhow!("Claude 配置缺少 env 字段或格式错误"))?;
     env.insert(
         "ANTHROPIC_AUTH_TOKEN".to_string(),
         Value::String(profile.api_key.clone()),
@@ -159,9 +164,8 @@ fn apply_codex_native(tool: &Tool, profile: &CodexProfile, provider_name: &str) 
 
     let providers_table = root_table
         .get_mut("model_providers")
-        .unwrap()
-        .as_table_mut()
-        .unwrap();
+        .and_then(|item| item.as_table_mut())
+        .ok_or_else(|| anyhow!("Codex 配置缺少 model_providers 表"))?;
 
     // 检查或创建 provider
     if !providers_table.contains_key(provider_name) {
@@ -178,9 +182,8 @@ fn apply_codex_native(tool: &Tool, profile: &CodexProfile, provider_name: &str) 
         // provider 已存在，检查是否需要更新
         let provider_table = providers_table
             .get_mut(provider_name)
-            .unwrap()
-            .as_table_mut()
-            .unwrap();
+            .and_then(|item| item.as_table_mut())
+            .ok_or_else(|| anyhow!("Provider {} 不存在或格式错误", provider_name))?;
 
         let current_base_url = provider_table
             .get("base_url")
@@ -209,10 +212,12 @@ fn apply_codex_native(tool: &Tool, profile: &CodexProfile, provider_name: &str) 
         serde_json::json!({})
     };
 
-    auth.as_object_mut().unwrap().insert(
-        "OPENAI_API_KEY".to_string(),
-        Value::String(profile.api_key.clone()),
-    );
+    auth.as_object_mut()
+        .ok_or_else(|| anyhow!("auth.json 格式错误：不是对象"))?
+        .insert(
+            "OPENAI_API_KEY".to_string(),
+            Value::String(profile.api_key.clone()),
+        );
     manager.json_uncached().write(&auth_path, &auth)?;
 
     Ok(())

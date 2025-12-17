@@ -14,6 +14,7 @@ use reqwest::header::HeaderMap as ReqwestHeaderMap;
 /// - URL 构建：使用标准拼接（无特殊逻辑）
 /// - 认证方式：Bearer Token
 /// - Authorization header 格式：`Bearer sk-ant-xxx`
+#[derive(Debug)]
 pub struct ClaudeHeadersProcessor;
 
 #[async_trait]
@@ -48,28 +49,34 @@ impl RequestProcessor for ClaudeHeadersProcessor {
                             && !session_api_key.is_empty()
                         {
                             // 记录会话事件（使用自定义配置）
-                            let _ = SESSION_MANAGER.send_event(SessionEvent::NewRequest {
+                            if let Err(e) = SESSION_MANAGER.send_event(SessionEvent::NewRequest {
                                 session_id: user_id.to_string(),
                                 tool_id: "claude-code".to_string(),
                                 timestamp,
-                            });
+                            }) {
+                                tracing::warn!("Session 事件发送失败: {}", e);
+                            }
                             (session_url, session_api_key)
                         } else {
                             // 使用全局配置并记录会话
-                            let _ = SESSION_MANAGER.send_event(SessionEvent::NewRequest {
+                            if let Err(e) = SESSION_MANAGER.send_event(SessionEvent::NewRequest {
                                 session_id: user_id.to_string(),
                                 tool_id: "claude-code".to_string(),
                                 timestamp,
-                            });
+                            }) {
+                                tracing::warn!("Session 事件发送失败: {}", e);
+                            }
                             (base_url.to_string(), api_key.to_string())
                         }
                     } else {
                         // 会话不存在，使用全局配置并记录新会话
-                        let _ = SESSION_MANAGER.send_event(SessionEvent::NewRequest {
+                        if let Err(e) = SESSION_MANAGER.send_event(SessionEvent::NewRequest {
                             session_id: user_id.to_string(),
                             tool_id: "claude-code".to_string(),
                             timestamp,
-                        });
+                        }) {
+                            tracing::warn!("Session 事件发送失败: {}", e);
+                        }
                         (base_url.to_string(), api_key.to_string())
                     }
                 } else {
