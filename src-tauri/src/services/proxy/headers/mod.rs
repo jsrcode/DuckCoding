@@ -97,22 +97,20 @@ pub trait RequestProcessor: Send + Sync {
 /// - `tool_id`: 工具标识符 ("claude-code", "codex", "gemini-cli")
 ///
 /// # 返回
-/// - 对应工具的 RequestProcessor 实例
-///
-/// # Panics
-/// 当 `tool_id` 不被支持时会 panic
-pub fn create_request_processor(tool_id: &str) -> Box<dyn RequestProcessor> {
+/// - `Ok(Box<dyn RequestProcessor>)`: 对应工具的 RequestProcessor 实例
+/// - `Err`: 当 tool_id 不被支持时返回错误
+pub fn create_request_processor(tool_id: &str) -> Result<Box<dyn RequestProcessor>> {
     match tool_id {
-        "claude-code" => Box::new(ClaudeHeadersProcessor),
-        "codex" => Box::new(CodexHeadersProcessor),
-        "gemini-cli" => Box::new(GeminiHeadersProcessor),
-        _ => panic!("Unsupported tool: {tool_id}"),
+        "claude-code" => Ok(Box::new(ClaudeHeadersProcessor)),
+        "codex" => Ok(Box::new(CodexHeadersProcessor)),
+        "gemini-cli" => Ok(Box::new(GeminiHeadersProcessor)),
+        _ => Err(anyhow::anyhow!("不支持的工具: {}", tool_id)),
     }
 }
 
 /// 旧工厂函数名称（向后兼容，已弃用）
 #[deprecated(since = "0.1.0", note = "请使用 create_request_processor")]
-pub fn create_headers_processor(tool_id: &str) -> Box<dyn RequestProcessor> {
+pub fn create_headers_processor(tool_id: &str) -> Result<Box<dyn RequestProcessor>> {
     create_request_processor(tool_id)
 }
 

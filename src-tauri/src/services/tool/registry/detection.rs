@@ -4,7 +4,7 @@
 
 use super::ToolRegistry;
 use crate::models::{InstallMethod, Tool, ToolInstance, ToolType};
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 impl ToolRegistry {
     /// 检测本地工具并持久化到数据库（并行检测，用于新手引导）
@@ -119,12 +119,16 @@ impl ToolRegistry {
 
         // 创建 ToolInstance（需要获取 Tool 的完整信息）
         let tool = Tool::by_id(tool_id).unwrap_or_else(|| {
-            tracing::warn!("未找到工具定义: {}, 使用对应的静态方法", tool_id);
+            tracing::warn!("未找到工具定义: {}, 使用静态方法", tool_id);
             match tool_id {
                 "claude-code" => Tool::claude_code(),
                 "codex" => Tool::codex(),
                 "gemini-cli" => Tool::gemini_cli(),
-                _ => panic!("未知工具ID: {}", tool_id),
+                _ => {
+                    // 返回一个默认 Tool，避免 panic
+                    tracing::error!("未知工具ID: {}", tool_id);
+                    Tool::claude_code() // 默认返回 claude-code
+                }
             }
         });
 

@@ -43,31 +43,31 @@ fn initialize_proxy_profiles() -> Result<(), Box<dyn std::error::Error>> {
 
     for tool_id in &["claude-code", "codex", "gemini-cli"] {
         if let Ok(Some(config)) = proxy_mgr.get_config(tool_id) {
-            // 只有在配置完整时才创建内置 Profile
-            if config.enabled
-                && config.local_api_key.is_some()
-                && config.real_api_key.is_some()
-                && config.real_base_url.is_some()
-            {
+            // 检查配置完整性并解构
+            if let (true, Some(proxy_key), Some(_real_key), Some(_real_url)) = (
+                config.enabled,
+                &config.local_api_key,
+                &config.real_api_key,
+                &config.real_base_url,
+            ) {
                 let proxy_profile_name = format!("dc_proxy_{}", tool_id.replace("-", "_"));
                 let proxy_endpoint = format!("http://127.0.0.1:{}", config.port);
-                let proxy_key = config.local_api_key.unwrap();
 
                 let result = match *tool_id {
                     "claude-code" => profile_mgr.save_claude_profile_internal(
                         &proxy_profile_name,
-                        proxy_key,
+                        proxy_key.clone(),
                         proxy_endpoint,
                     ),
                     "codex" => profile_mgr.save_codex_profile_internal(
                         &proxy_profile_name,
-                        proxy_key,
+                        proxy_key.clone(),
                         proxy_endpoint,
                         Some("responses".to_string()),
                     ),
                     "gemini-cli" => profile_mgr.save_gemini_profile_internal(
                         &proxy_profile_name,
-                        proxy_key,
+                        proxy_key.clone(),
                         proxy_endpoint,
                         None, // 不设置 model，保留用户原有配置
                     ),
