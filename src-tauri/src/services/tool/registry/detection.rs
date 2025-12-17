@@ -22,7 +22,7 @@ impl ToolRegistry {
 
         // 收集结果并保存到数据库
         let mut instances = Vec::new();
-        let db = self.db.lock().await;
+        let db = self.db.read().await;
 
         for instance in results {
             tracing::info!(
@@ -171,7 +171,7 @@ impl ToolRegistry {
         tracing::info!("开始检测单个工具: {}", tool_id);
 
         // 1. 删除该工具的所有本地实例（避免重复）
-        let db = self.db.lock().await;
+        let db = self.db.read().await;
         let all_instances = db.get_all_instances()?;
         for inst in &all_instances {
             if inst.base_id == tool_id && inst.tool_type == ToolType::Local {
@@ -187,7 +187,7 @@ impl ToolRegistry {
         // 3. 检查路径冲突（如果检测到路径）
         if instance.installed {
             if let Some(detected_path) = &instance.install_path {
-                let db = self.db.lock().await;
+                let db = self.db.read().await;
                 let all_instances = db.get_all_instances()?;
                 drop(db);
 
@@ -207,7 +207,7 @@ impl ToolRegistry {
         }
 
         // 4. 保存到数据库
-        let db = self.db.lock().await;
+        let db = self.db.read().await;
         if instance.installed {
             db.upsert_instance(&instance)?;
             tracing::info!("工具 {} 检测并保存成功", instance.tool_name);
@@ -234,7 +234,7 @@ impl ToolRegistry {
         let results = futures_util::future::join_all(futures).await;
 
         // 获取数据库中现有的本地工具实例
-        let db = self.db.lock().await;
+        let db = self.db.read().await;
         let existing_local = db.get_local_instances().unwrap_or_default();
 
         // 收集检测到的工具 ID
@@ -294,7 +294,7 @@ impl ToolRegistry {
 
         if !force_redetect {
             // 1. 先查询数据库中是否已有该工具的本地实例
-            let db = self.db.lock().await;
+            let db = self.db.read().await;
             let all_instances = db.get_all_instances()?;
             drop(db);
 

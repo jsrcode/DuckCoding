@@ -17,7 +17,7 @@ impl ToolRegistry {
         let mut grouped: HashMap<String, Vec<ToolInstance>> = HashMap::new();
 
         // 从数据库读取所有实例
-        let db = self.db.lock().await;
+        let db = self.db.read().await;
         let db_instances = match db.get_all_instances() {
             Ok(instances) => {
                 tracing::debug!("从数据库读取到 {} 个实例", instances.len());

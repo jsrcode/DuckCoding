@@ -21,7 +21,7 @@ impl ToolRegistry {
     /// - Err: 更新失败
     pub async fn update_instance(&self, instance_id: &str, force: bool) -> Result<UpdateResult> {
         // 1. 从数据库获取实例信息
-        let db = self.db.lock().await;
+        let mut db = self.db.write().await;
         let all_instances = db.get_all_instances()?;
         drop(db);
 
@@ -39,7 +39,7 @@ impl ToolRegistry {
         // 3. 如果更新成功，更新数据库中的版本号
         if result.success {
             if let Some(ref new_version) = result.current_version {
-                let db = self.db.lock().await;
+                let mut db = self.db.write().await;
                 let mut updated_instance = instance.clone();
                 updated_instance.version = Some(new_version.clone());
                 updated_instance.updated_at = chrono::Utc::now().timestamp();
@@ -63,7 +63,7 @@ impl ToolRegistry {
     /// - Err: 检查失败
     pub async fn check_update_for_instance(&self, instance_id: &str) -> Result<UpdateResult> {
         // 1. 从数据库获取实例信息
-        let db = self.db.lock().await;
+        let mut db = self.db.write().await;
         let all_instances = db.get_all_instances()?;
         drop(db);
 
@@ -124,7 +124,7 @@ impl ToolRegistry {
 
         // 4. 如果当前版本有变化，更新数据库
         if current_version != instance.version {
-            let db = self.db.lock().await;
+            let mut db = self.db.write().await;
             let mut updated_instance = instance.clone();
             updated_instance.version = current_version.clone();
             updated_instance.updated_at = chrono::Utc::now().timestamp();
@@ -150,7 +150,7 @@ impl ToolRegistry {
     /// - Ok(Vec<ToolStatus>): 更新后的工具状态列表
     /// - Err: 刷新失败
     pub async fn refresh_all_tool_versions(&self) -> Result<Vec<crate::models::ToolStatus>> {
-        let db = self.db.lock().await;
+        let mut db = self.db.write().await;
         let all_instances = db.get_all_instances()?;
         drop(db);
 
@@ -184,7 +184,7 @@ impl ToolRegistry {
 
             // 如果版本号有变化，更新数据库
             if new_version != instance.version {
-                let db = self.db.lock().await;
+                let mut db = self.db.write().await;
                 let mut updated_instance = instance.clone();
                 updated_instance.version = new_version.clone();
                 updated_instance.updated_at = chrono::Utc::now().timestamp();
