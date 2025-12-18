@@ -43,7 +43,7 @@ impl ToolRegistry {
         );
 
         // 保存到数据库
-        let mut db = self.db.write().await;
+        let db = self.db.write().await;
         db.add_instance(&instance)?;
         drop(db);
 
@@ -71,7 +71,7 @@ impl ToolRegistry {
         );
 
         // 检查是否已存在
-        let mut db = self.db.write().await;
+        let db = self.db.write().await;
         if db.instance_exists(&instance.instance_id)? {
             return Err(anyhow::anyhow!("该SSH实例已存在"));
         }
@@ -83,7 +83,7 @@ impl ToolRegistry {
 
     /// 删除工具实例（仅限SSH类型）
     pub async fn delete_instance(&self, instance_id: &str) -> Result<()> {
-        let mut db = self.db.write().await;
+        let db = self.db.write().await;
 
         // 获取实例
         let instance = db
@@ -146,7 +146,7 @@ impl ToolRegistry {
         }
 
         // 3. 检查路径是否已存在
-        let mut db = self.db.write().await;
+        let db = self.db.write().await;
         let all_instances = db.get_all_instances()?;
 
         // 路径冲突检查

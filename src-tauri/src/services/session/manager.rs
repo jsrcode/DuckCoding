@@ -12,8 +12,8 @@ use once_cell::sync::Lazy;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tokio::sync::CancellationToken;
 use tokio::time::{interval, Duration};
+use tokio_util::sync::CancellationToken;
 
 /// 全局取消令牌，用于优雅关闭后台任务
 static CANCELLATION_TOKEN: Lazy<CancellationToken> = Lazy::new(CancellationToken::new);
@@ -356,6 +356,14 @@ impl SessionManager {
     }
 }
 
+/// 关闭 SessionManager 后台任务
+///
+/// 在应用关闭时调用，优雅地停止所有后台任务并刷盘缓冲区数据
+pub fn shutdown_session_manager() {
+    tracing::info!("SessionManager 关闭信号已发送");
+    CANCELLATION_TOKEN.cancel();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -487,12 +495,4 @@ mod tests {
         assert_eq!(session.url, "https://api.test.com");
         assert_eq!(session.api_key, "sk-test");
     }
-}
-
-/// 关闭 SessionManager 后台任务
-///
-/// 在应用关闭时调用，优雅地停止所有后台任务并刷盘缓冲区数据
-pub fn shutdown_session_manager() {
-    tracing::info!("SessionManager 关闭信号已发送");
-    CANCELLATION_TOKEN.cancel();
 }

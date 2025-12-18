@@ -11,7 +11,7 @@ use crate::services::tool::{DetectorRegistry, ToolInstanceDB};
 use crate::utils::{CommandExecutor, WSLExecutor};
 use anyhow::Result;
 use std::sync::Arc;
-use tokio::sync::RwLock;  // 改用 RwLock
+use tokio::sync::RwLock; // 改用 RwLock
 
 /// 工具检测进度（用于前端显示）
 #[derive(Debug, Clone, serde::Serialize)]
@@ -25,7 +25,7 @@ pub struct ToolDetectionProgress {
 
 /// 工具注册表 - 统一管理所有工具实例
 pub struct ToolRegistry {
-    pub(super) db: Arc<RwLock<ToolInstanceDB>>,  // 改用 RwLock
+    pub(super) db: Arc<RwLock<ToolInstanceDB>>, // 改用 RwLock
     pub(super) detector_registry: DetectorRegistry,
     pub(super) command_executor: CommandExecutor,
     pub(super) wsl_executor: WSLExecutor,
@@ -41,7 +41,7 @@ impl ToolRegistry {
         db.init_tables()?;
 
         Ok(Self {
-            db: Arc::new(RwLock::new(db)),  // 改用 RwLock
+            db: Arc::new(RwLock::new(db)), // 改用 RwLock
             detector_registry: DetectorRegistry::new(),
             command_executor: CommandExecutor::new(),
             wsl_executor: WSLExecutor::new(),
@@ -50,7 +50,7 @@ impl ToolRegistry {
 
     /// 检查数据库中是否已有本地工具数据
     pub async fn has_local_tools_in_db(&self) -> Result<bool> {
-        let db = self.db.read().await;  // 读锁
+        let db = self.db.read().await; // 读锁
         db.has_local_tools()
     }
 }
