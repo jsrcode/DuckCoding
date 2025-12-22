@@ -50,7 +50,12 @@ jobs:
           mkdir -p states
           for zip in pr-check-state-*.zip; do
             if [ -f "$zip" ]; then
+              # Extract platform name from zip filename (e.g., pr-check-state-ubuntu-22.04.zip -> ubuntu-22.04)
+              platform="${zip#pr-check-state-}"
+              platform="${platform%.zip}"
+              # Unzip and rename to platform-specific filename
               unzip -o "$zip" -d states/
+              mv states/state.json "states/${platform}.json"
             fi
           done
           ls -la states/ || true
